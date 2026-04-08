@@ -1,0 +1,175 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=DM+Mono:wght@400;500&display=swap');
+@import "tailwindcss";
+
+/* ============================================================
+   LEAN SOLUTIONS GROUP — QUALLY DESIGN TOKENS
+   Source of truth. Referenced by @theme inline above.
+   ============================================================ */
+:root {
+  /* LSG Primary Palette */
+  --lsg-lean-blue:       #0096FF;
+  --lsg-lean-blue-dark:  #006EF4;
+  --lsg-lean-blue-light: #E6F4FF;
+  --lsg-trust-navy:      #002F65;
+  --lsg-trust-navy-mid:  #003D84;
+  --lsg-midnight:        #001E4B;
+  --lsg-orange:          #FF8021;
+  --lsg-orange-light:    #FFF0E6;
+
+  /* Semantic Surface Tokens */
+  --color-background-primary:    #FFFFFF;
+  --color-background-secondary:  #F4F7FB;
+  --color-background-tertiary:   #EBF1F8;
+  --color-background-sidebar:    var(--lsg-trust-navy);
+  --color-background-accent:     var(--lsg-lean-blue-light);
+
+  /* Semantic Text Tokens */
+  --color-text-primary:   var(--lsg-trust-navy);
+  --color-text-secondary: #3A5272;
+  --color-text-tertiary:  #7A92AD;
+  --color-text-inverse:   #FFFFFF;
+  --color-text-accent:    var(--lsg-lean-blue);
+
+  /* Semantic Border Tokens */
+  --color-border-primary:   #C2D4E8;
+  --color-border-secondary: #D8E6F2;
+  --color-border-tertiary:  #EAF0F7;
+
+  /* Interactive / Action Tokens */
+  --color-action-primary:        var(--lsg-lean-blue);
+  --color-action-primary-hover:  var(--lsg-lean-blue-dark);
+  --color-action-primary-text:   #FFFFFF;
+  --color-action-secondary-bg:   var(--lsg-lean-blue-light);
+  --color-action-secondary-text: var(--lsg-lean-blue-dark);
+
+  /* Status Colors */
+  --color-success-bg:   #E1F5EE;
+  --color-success-text: #085041;
+  --color-success-dot:  #1D9E75;
+  --color-warning-bg:   #FFF0E6;
+  --color-warning-text: #7A3200;
+  --color-warning-dot:  var(--lsg-orange);
+  --color-error-bg:     #FDECEA;
+  --color-error-text:   #7A1010;
+  --color-error:        #E24B4A;
+
+  /* COPC Category Colors */
+  --color-copc-customer-bg:     #E6F4FF;
+  --color-copc-customer-text:   #003D84;
+  --color-copc-customer-dot:    var(--lsg-lean-blue);
+  --color-copc-business-bg:     #FFF0E6;
+  --color-copc-business-text:   #7A3200;
+  --color-copc-business-dot:    var(--lsg-orange);
+  --color-copc-compliance-bg:   #E1F5EE;
+  --color-copc-compliance-text: #085041;
+  --color-copc-compliance-dot:  #1D9E75;
+
+  /* Border Radius */
+  --border-radius-sm:   6px;
+  --border-radius-md:   8px;
+  --border-radius-lg:   12px;
+  --border-radius-xl:   16px;
+  --border-radius-pill: 999px;
+
+  /* Shadows */
+  --shadow-sm:   0 1px 3px rgba(0, 47, 101, 0.07);
+  --shadow-md:   0 4px 12px rgba(0, 47, 101, 0.10);
+  --shadow-lg:   0 8px 24px rgba(0, 47, 101, 0.14);
+  --shadow-card: 0 2px 8px rgba(0, 47, 101, 0.08);
+
+  /* Transitions */
+  --transition-fast: 0.15s ease;
+  --transition-base: 0.25s ease;
+  --transition-slow: 0.4s cubic-bezier(0.4, 0.2, 0.2, 1);
+
+  /* Layout */
+  --topbar-height: 60px;
+  --sidebar-width: 220px;
+}
+
+/* ============================================================
+   LSG BRAND TOKENS → TAILWIND UTILITY CLASSES
+   @theme inline tells Tailwind to resolve var() at runtime
+   so our :root values below are respected.
+   ============================================================ */
+@theme {
+  /* Colors — generates bg-*, text-*, border-* utilities */
+  --color-lsg-blue:         var(--lsg-lean-blue);
+  --color-lsg-blue-dark:    var(--lsg-lean-blue-dark);
+  --color-lsg-blue-light:   var(--lsg-lean-blue-light);
+  --color-lsg-navy:         var(--lsg-trust-navy);
+  --color-lsg-navy-mid:     var(--lsg-trust-navy-mid);
+  --color-lsg-midnight:     var(--lsg-midnight);
+  --color-lsg-orange:       var(--lsg-orange);
+  --color-lsg-orange-light: var(--lsg-orange-light);
+
+  /* Semantic surfaces */
+  --color-bg-primary:   var(--color-background-primary);
+  --color-bg-secondary: var(--color-background-secondary);
+  --color-bg-tertiary:  var(--color-background-tertiary);
+  --color-bg-accent:    var(--color-background-accent);
+
+  /* Semantic text */
+  --color-text-pri: var(--color-text-primary);
+  --color-text-sec: var(--color-text-secondary);
+  --color-text-ter: var(--color-text-tertiary);
+
+  /* Semantic borders */
+  --color-border-pri: var(--color-border-primary);
+  --color-border-sec: var(--color-border-secondary);
+  --color-border-ter: var(--color-border-tertiary);
+
+  /* Status */
+  --color-success-surface: var(--color-success-bg);
+  --color-success-on:      var(--color-success-text);
+  --color-warning-surface: var(--color-warning-bg);
+  --color-warning-on:      var(--color-warning-text);
+  --color-error-surface:   var(--color-error-bg);
+  --color-error-on:        var(--color-error-text);
+  --color-error-default:   var(--color-error);
+
+  /* Typography — generates font-sans, font-mono utilities */
+  --font-sans: 'DM Sans', 'Arial', system-ui, sans-serif;
+  --font-mono: 'DM Mono', 'Courier New', monospace;
+
+  /* Border radius — generates rounded-* utilities */
+  --radius-sm: var(--border-radius-sm);
+  --radius-md: var(--border-radius-md);
+  --radius-lg: var(--border-radius-lg);
+  --radius-xl: var(--border-radius-xl);
+
+  /* Shadows — generates shadow-* utilities */
+  --shadow-card: var(--shadow-card);
+  --shadow-sm:   var(--shadow-sm);
+  --shadow-md:   var(--shadow-md);
+  --shadow-lg:   var(--shadow-lg);
+}
+
+
+
+/* ── Reset & Base ───────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; }
+
+html { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
+
+body {
+  font-family: var(--font-sans);
+  background: var(--color-background-tertiary);
+  color: var(--color-text-primary);
+  line-height: 1.5;
+}
+
+/* ── Scrollbar ──────────────────────────────────────────── */
+::-webkit-scrollbar        { width: 5px; height: 5px; }
+::-webkit-scrollbar-track  { background: transparent; }
+::-webkit-scrollbar-thumb  { background: var(--color-border-primary); border-radius: 999px; }
+::-webkit-scrollbar-thumb:hover { background: var(--color-text-tertiary); }
+
+/* ── Shared keyframes ───────────────────────────────────── */
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+@keyframes modal-in {
+  from { opacity: 0; transform: translateY(-10px) scale(0.97); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}

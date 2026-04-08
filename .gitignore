@@ -1,0 +1,61 @@
+# Created by https://www.toptal.com/developers/gitignore/api/java,maven,node,react
+# Edit at https://www.toptal.com/developers/gitignore?templates=java,maven,node,react
+
+
+##Non-Related Folder
+Postman Test Templates/
+
+
+# --- Qually Project Specifics ---
+# Ignore Repomix output files
+repomix-output.xml
+*.repomix-output.xml
+.DS_Store
+
+# --- Backend (Spring Boot - qually/) ---
+qually/target/
+qually/*.log
+qually/.mvn/wrapper/maven-wrapper.jar
+qually/.idea/
+qually/.vscode/
+# Ignore sensitive local properties if you add them later
+qually/src/main/resources/application-local.properties
+
+# --- Frontend (React/Vite - qually-frontend/) ---
+qually-frontend/node_modules/
+qually-frontend/dist/
+qually-frontend/dist-ssr/
+qually-frontend/*.local
+qually-frontend/.env
+qually-frontend/.env.development
+qually-frontend/.env.test
+qually-frontend/.env.production
+qually-frontend/.vscode/
+qually-frontend/.idea/
+
+# --- General Java/Maven Rules ---
+*.class
+*.jar
+*.war
+*.nar
+*.ear
+*.zip
+*.tar.gz
+*.rar
+hs_err_pid*
+replay_pid*
+
+# --- General Node/Web Rules ---
+logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+.eslintcache
+.stylelintcache
+.node_repl_history
+*.tsbuildinfo
+
+# --- System Files ---
+Thumbs.db
+desktop.ini
