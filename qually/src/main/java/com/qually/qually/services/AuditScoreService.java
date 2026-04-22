@@ -5,7 +5,7 @@ import com.qually.qually.models.AuditResponse;
 import com.qually.qually.models.AuditSession;
 import com.qually.qually.models.enums.AuditLogicType;
 import com.qually.qually.models.enums.CopcCategory;
-import com.qually.qually.repositories.AttributeResponseRepository;
+import com.qually.qually.repositories.SubattributeResponseRepository;
 import com.qually.qually.repositories.AuditResponseRepository;
 import com.qually.qually.repositories.AuditSessionRepository;
 import jakarta.persistence.EntityNotFoundException;
@@ -22,14 +22,14 @@ public class AuditScoreService {
 
     private final AuditSessionRepository auditSessionRepository;
     private final AuditResponseRepository auditResponseRepository;
-    private final AttributeResponseRepository attributeResponseRepository;
+    private final SubattributeResponseRepository subattributeResponseRepository;
 
     public AuditScoreService(AuditSessionRepository auditSessionRepository,
                              AuditResponseRepository auditResponseRepository,
-                             AttributeResponseRepository attributeResponseRepository) {
+                             SubattributeResponseRepository subattributeResponseRepository) {
         this.auditSessionRepository = auditSessionRepository;
         this.auditResponseRepository = auditResponseRepository;
-        this.attributeResponseRepository = attributeResponseRepository;
+        this.subattributeResponseRepository = subattributeResponseRepository;
     }
 
     @Transactional(readOnly = true)
@@ -48,7 +48,7 @@ public class AuditScoreService {
         Map<CopcCategory, String> finalScores = new HashMap<>();
         for (CopcCategory category : CopcCategory.values()) {
             List<AuditResponse> categoryResponses = groupedResponsesMap.getOrDefault(category, List.of());
-            finalScores.put(category, evaluateCategory(categoryResponses, session.getAuditLogicType()));
+            finalScores.put(category, evaluateCategory(categoryResponses, session.getAuditProtocol().getAuditLogicType()));
         }
 
         return finalScores;
@@ -86,7 +86,7 @@ public class AuditScoreService {
     }
 
     private boolean isOurFault(AuditResponse response) {
-        List<SubattributeResponse> attrResponses = attributeResponseRepository
+        List<SubattributeResponse> attrResponses = subattributeResponseRepository
                 .findByAuditResponse_AuditResponseId(response.getAuditResponseId());
 
         for (SubattributeResponse attrResponse : attrResponses) {

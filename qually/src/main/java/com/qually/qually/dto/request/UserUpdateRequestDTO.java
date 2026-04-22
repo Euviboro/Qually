@@ -11,6 +11,9 @@ public class UserUpdateRequestDTO {
     @NotBlank(message = "Full name is required")
     private String fullName;
 
-    @NotBlank(message = "Role is required")
-    private String role;
+    /** Optional — allows reassigning the user to a different role. */
+    private Integer roleId;
+
+    /** Optional — allows changing the user's manager. */
+    private Integer managerId;
 }

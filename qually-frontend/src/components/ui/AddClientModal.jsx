@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { createClient } from "../../api/clients";
 
-export  function AddClientModal({ isOpen, onClose, onClientCreated }) {
+export function AddClientModal({ isOpen, onClose, onClientCreated }) {
   const [clientName, setClientName] = useState("");
   const [saving, setSaving]         = useState(false);
   const [error, setError]           = useState(null);
@@ -42,36 +42,24 @@ export  function AddClientModal({ isOpen, onClose, onClientCreated }) {
   };
 
   return (
-    /* Backdrop */
     <div
       onClick={onClose}
-      className="fixed inset-0 z-[200] flex items-center justify-center p-4
-                 bg-[rgba(0,20,50,0.35)] backdrop-blur-[2px]"
+      className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-[rgba(0,20,50,0.35)] backdrop-blur-[2px]"
     >
-      {/* Panel */}
       <div
         onClick={(e) => e.stopPropagation()}
-        className="w-full max-w-[420px] flex flex-col gap-5 
-        bg-white rounded-[16px] border border-[#D8E6F2] 
-        shadow-[0_8px_24px_rgba(0,47,101,0.14)]
-        p-7 [animation:modal-in_0.18s_ease]"
+        className="w-full max-w-[420px] flex flex-col gap-5 bg-bg-primary rounded-xl border border-border-sec shadow-lg p-7 [animation:modal-in_0.18s_ease]"
       >
         {/* Header */}
         <div className="flex items-start justify-between">
           <div>
-            <p className="text-[20px] font-bold text-[#002F65] tracking-tight mb-1">
-              New Client
-            </p>
-            <p className="text-[13px] text-[#3A5272]">
-              Register a new client.
-            </p>
+            <p className="text-[20px] font-bold text-text-pri tracking-tight mb-1">New Client</p>
+            <p className="text-[13px] text-text-sec">Register a new client.</p>
           </div>
           <button
             onClick={onClose}
             aria-label="Close"
-            className="text-[#7A92AD] hover:text-[#002F65] text-lg leading-none
-            p-1 rounded cursor-pointer bg-transparent border-none
-            transition-colors"
+            className="text-text-ter hover:text-text-pri text-lg leading-none p-1 rounded cursor-pointer bg-transparent border-none transition-colors"
           >
             ✕
           </button>
@@ -79,12 +67,9 @@ export  function AddClientModal({ isOpen, onClose, onClientCreated }) {
 
         {/* Form */}
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-
-          {/* Client name */}
           <div>
-            <label className="block text-[12px] font-semibold text-[#3A5272]
-                              tracking-wide mb-1.5">
-              Client name <span className="text-[#0096FF]">*</span>
+            <label className="block text-[12px] font-semibold text-text-sec tracking-wide mb-1.5">
+              Client name <span className="text-lsg-blue">*</span>
             </label>
             <input
               ref={inputRef}
@@ -94,56 +79,33 @@ export  function AddClientModal({ isOpen, onClose, onClientCreated }) {
               placeholder='e.g. "Acme"'
               disabled={saving}
               required
-              className="w-full px-3 py-[9px] text-[13px] font-sans
-                         bg-white disabled:bg-[#F4F7FB]
-                         text-[#002F65] placeholder:text-[#7A92AD]
-                         border border-[#D8E6F2] rounded-[8px]
-                         outline-none
-                         focus:border-[#0096FF] focus:ring-3 focus:ring-[#0096FF]/10
-                         transition-[border-color,box-shadow]"
+              className="w-full px-3 py-[9px] text-[13px] font-sans bg-bg-primary disabled:bg-bg-secondary text-text-pri placeholder:text-text-ter border border-border-sec rounded-md outline-none focus:border-lsg-blue focus:ring-3 focus:ring-lsg-blue/10 transition-[border-color,box-shadow]"
             />
           </div>
 
-          {/* Error */}
           {error && (
-            <div className="px-3 py-2 text-[12px] rounded-[8px]
-                            bg-[#FDECEA] text-[#7A1010]
-                            border border-[rgba(226,75,74,0.2)]">
+            <div className="px-3 py-2 text-[12px] rounded-md bg-error-surface text-error-on border border-[rgba(226,75,74,0.2)]">
               {error}
             </div>
           )}
 
-          {/* Actions */}
           <div className="flex justify-end gap-2 pt-1">
             <button
               type="button"
               onClick={onClose}
               disabled={saving}
-              className="px-4 py-2 text-[13px] font-medium font-sans
-                         bg-[#F4F7FB] hover:bg-[#EAF0F7]
-                         text-[#002F65]
-                         border border-[#D8E6F2] rounded-[8px]
-                         disabled:opacity-50 disabled:cursor-not-allowed
-                         transition-colors cursor-pointer"
+              className="px-4 py-2 text-[13px] font-medium font-sans bg-bg-secondary hover:bg-bg-tertiary text-text-pri border border-border-sec rounded-md disabled:opacity-50 disabled:cursor-not-allowed transition-colors cursor-pointer"
             >
               Cancel
             </button>
-
             <button
               type="submit"
               disabled={saving || !clientName.trim()}
-              className="inline-flex items-center gap-1.5
-                         px-4 py-2 text-[13px] font-medium font-sans
-                         bg-[#0096FF] hover:bg-[#006EF4]
-                         text-white rounded-[8px]
-                         disabled:opacity-45 disabled:cursor-not-allowed
-                         transition-colors cursor-pointer"
+              className="inline-flex items-center gap-1.5 px-4 py-2 text-[13px] font-medium font-sans bg-lsg-blue hover:bg-lsg-blue-dark text-white rounded-md disabled:opacity-45 disabled:cursor-not-allowed transition-colors cursor-pointer"
             >
               {saving ? (
                 <>
-                  <span className="w-3 h-3 rounded-full border-2
-                                   border-white/30 border-t-white
-                                   [animation:spin_0.7s_linear_infinite]" />
+                  <span className="w-3 h-3 rounded-full border-2 border-white/30 border-t-white [animation:spin_0.7s_linear_infinite]" />
                   Saving…
                 </>
               ) : "Create client"}

@@ -1,6 +1,6 @@
 package com.qually.qually.controllers;
 
-import com.qually.qually.dto.request.AttributeResponseRequestDTO;
+import com.qually.qually.dto.request.SubattributeResponseRequestDTO;
 import com.qually.qually.dto.response.AttributeAnswerResponseDTO;
 import com.qually.qually.services.AttributeResponseService;
 import jakarta.validation.Valid;
@@ -21,7 +21,7 @@ public class AttributeResponseController {
 
     @PostMapping
     public ResponseEntity<AttributeAnswerResponseDTO> createAttributeResponse(
-            @Valid @RequestBody AttributeResponseRequestDTO dto) {
+            @Valid @RequestBody SubattributeResponseRequestDTO dto) {
         return ResponseEntity.ok(attributeResponseService.createAttributeResponse(dto));
     }
 

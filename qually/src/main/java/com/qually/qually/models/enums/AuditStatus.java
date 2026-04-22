@@ -1,10 +1,8 @@
 package com.qually.qually.models.enums;
 
 public enum AuditStatus {
-    IN_PROGRESS,
-    SUBMITTED,
+    DRAFT,
     COMPLETED,
-    REVIEWED,
     DISPUTED,
     RESOLVED
 }

@@ -1,27 +1,36 @@
 import { Btn } from "../../components/ui/Btn";
 import { Label } from "../../components/ui/Label";
 import { SectionCard } from "../../components/ui/SectionCard";
-import { CategorySelector, COPC_CATEGORIES } from "./CategorySelector";
+import { CategorySelector, COPC_CATEGORIES } from "../../components/ui/CategorySelector";
 import { AttributeEditor } from "./AttributeEditor";
 import { EMPTY_ATTRIBUTE } from "../../hooks/useNewProtocol";
+import { COPC_CATEGORY_META } from "../../constants";
 
 export function QuestionCard({ question, index, onChange, onRemove, canRemove }) {
   const isConfirmed  = question.confirmed;
-  const categoryMeta = COPC_CATEGORIES.find((c) => c.value === question.category);
+  const categoryMeta = COPC_CATEGORY_META[question.category];
 
   return (
-    <SectionCard className={`transition-all duration-300 ${isConfirmed ? "border-gray-200" : "border-blue-400 ring-4 ring-blue-500/5"}`}>
+    <SectionCard className={`transition-all duration-300 ${isConfirmed ? "border-border-sec" : "border-lsg-blue ring-4 ring-lsg-blue/5"}`}>
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-2.5">
-          <span className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold font-mono
-            ${isConfirmed ? "bg-gray-100 text-gray-400" : "bg-blue-100 text-blue-600"}`}>
+          <span
+            className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold font-mono
+              ${isConfirmed ? "bg-bg-tertiary text-text-ter" : "bg-bg-accent text-lsg-blue"}`}
+          >
             {index + 1}
           </span>
-          <span className={`text-sm font-bold uppercase tracking-tight ${isConfirmed ? "text-gray-500" : "text-blue-600"}`}>
+          <span className={`text-sm font-bold uppercase tracking-tight ${isConfirmed ? "text-text-ter" : "text-lsg-blue"}`}>
             {isConfirmed ? "Question confirmed" : "New question"}
           </span>
           {isConfirmed && categoryMeta && (
-            <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase ${categoryMeta.bg} ${categoryMeta.color}`}>
+            <span
+              style={{
+                background: `var(${categoryMeta.bgVar})`,
+                color: `var(${categoryMeta.textVar})`,
+              }}
+              className="text-[10px] px-2 py-0.5 rounded-full font-bold uppercase"
+            >
               {categoryMeta.label}
             </span>
           )}
@@ -32,23 +41,23 @@ export function QuestionCard({ question, index, onChange, onRemove, canRemove })
             <Btn variant="ghost" size="sm" onClick={() => onChange({ ...question, confirmed: false })}>Edit</Btn>
           )}
           {canRemove && (
-            <button onClick={onRemove} className="text-gray-300 hover:text-red-500 p-1 transition-colors">✕</button>
+            <button onClick={onRemove} className="text-text-ter hover:text-error-on p-1 transition-colors">✕</button>
           )}
         </div>
       </div>
 
       {isConfirmed ? (
-        <p className="text-gray-900 leading-relaxed">{question.text}</p>
+        <p className="text-text-pri leading-relaxed">{question.questionText}</p>
       ) : (
         <div className="flex flex-col gap-4">
           <div>
             <Label required>Question text</Label>
             <textarea
-              value={question.text}
-              onChange={(e) => onChange({ ...question, text: e.target.value })}
+              value={question.questionText}
+              onChange={(e) => onChange({ ...question, questionText: e.target.value })}
               placeholder="Describe what is being evaluated…"
               rows={2}
-              className="w-full px-3 py-2 text-base rounded-md border border-gray-200 bg-white outline-none focus:border-blue-500 focus:ring-3 focus:ring-blue-500/10 transition-all resize-none"
+              className="w-full px-3 py-2 text-base rounded-md border border-border-sec bg-bg-primary text-text-pri placeholder:text-text-ter outline-none focus:border-lsg-blue focus:ring-3 focus:ring-lsg-blue/10 transition-all resize-none"
             />
           </div>
 
@@ -62,7 +71,7 @@ export function QuestionCard({ question, index, onChange, onRemove, canRemove })
 
           {question.subattributes.length > 0 && (
             <div className="flex flex-col gap-2">
-              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Subattributes</p>
+              <p className="text-[10px] font-bold text-text-ter uppercase tracking-widest">Subattributes</p>
               {question.subattributes.map((attr) => (
                 <AttributeEditor
                   key={attr.id}
@@ -84,7 +93,7 @@ export function QuestionCard({ question, index, onChange, onRemove, canRemove })
             </div>
           )}
 
-          <div className="flex items-center justify-between border-t border-gray-50 pt-4">
+          <div className="flex items-center justify-between border-t border-border-ter pt-4">
             <Btn
               variant="ghost"
               size="sm"
@@ -95,7 +104,7 @@ export function QuestionCard({ question, index, onChange, onRemove, canRemove })
             <Btn
               variant="primary"
               onClick={() => onChange({ ...question, confirmed: true })}
-              disabled={!question.text.trim() || !question.category}
+              disabled={!question.questionText.trim() || !question.category}
             >
               Confirm question
             </Btn>

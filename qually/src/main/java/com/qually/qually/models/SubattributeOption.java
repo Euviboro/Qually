@@ -21,6 +21,6 @@ public class SubattributeOption {
     @JoinColumn(name = "subattribute_id", nullable = false)
     private Subattribute subattribute;
 
-    @Column(name = "options_label")
+    @Column(name = "option_label", length = 70)
     private String optionLabel;
 }

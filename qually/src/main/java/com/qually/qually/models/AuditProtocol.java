@@ -1,11 +1,21 @@
 package com.qually.qually.models;
 
+import com.qually.qually.models.enums.AuditLogicType;
+import com.qually.qually.models.enums.ProtocolStatus;
 import jakarta.persistence.*;
 import lombok.*;
 
 import java.util.ArrayList;
 import java.util.List;
 
+/**
+ * Represents an audit protocol.
+ *
+ * <p><strong>Schema alignment:</strong> {@code auditLogicType} has been moved
+ * here from {@code AuditSession}, matching the DB where the column lives on
+ * {@code audit_protocols}. The scoring strategy is a protocol-level concern —
+ * all sessions that use this protocol apply the same logic.</p>
+ */
 @Entity
 @Table(name = "audit_protocols")
 @Getter
@@ -26,8 +36,17 @@ public class AuditProtocol {
     @Column(name = "protocol_version", nullable = false)
     private Integer protocolVersion;
 
-    @Column(name = "is_finalized", nullable = false)
-    private Boolean isFinalized;
+    @Enumerated(EnumType.STRING)
+    @Column(name = "protocol_status", nullable = false, columnDefinition = "MEDIUMTEXT")
+    private ProtocolStatus protocolStatus;
+
+    /**
+     * Scoring strategy for all sessions conducted against this protocol.
+     * Stored as a VARCHAR(100) in the DB.
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "audit_logic_type", nullable = false, length = 100)
+    private AuditLogicType auditLogicType;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "client_id", nullable = false)

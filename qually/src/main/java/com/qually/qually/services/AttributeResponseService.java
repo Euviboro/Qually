@@ -1,12 +1,12 @@
 package com.qually.qually.services;
 
-import com.qually.qually.dto.request.AttributeResponseRequestDTO;
+import com.qually.qually.dto.request.SubattributeResponseRequestDTO;
 import com.qually.qually.dto.response.AttributeAnswerResponseDTO;
 import com.qually.qually.models.Subattribute;
 import com.qually.qually.models.SubattributeResponse;
 import com.qually.qually.models.AuditResponse;
 import com.qually.qually.repositories.SubattributeRepository;
-import com.qually.qually.repositories.AttributeResponseRepository;
+import com.qually.qually.repositories.SubattributeResponseRepository;
 import com.qually.qually.repositories.AuditResponseRepository;
 import jakarta.persistence.EntityNotFoundException;
 import org.springframework.stereotype.Service;
@@ -17,20 +17,20 @@ import java.util.List;
 @Service
 public class AttributeResponseService {
 
-    private final AttributeResponseRepository attributeResponseRepository;
+    private final SubattributeResponseRepository subattributeResponseRepository;
     private final AuditResponseRepository auditResponseRepository;
     private final SubattributeRepository subattributeRepository;
 
-    public AttributeResponseService(AttributeResponseRepository attributeResponseRepository,
+    public AttributeResponseService(SubattributeResponseRepository subattributeResponseRepository,
                                     AuditResponseRepository auditResponseRepository,
                                     SubattributeRepository subattributeRepository) {
-        this.attributeResponseRepository = attributeResponseRepository;
+        this.subattributeResponseRepository = subattributeResponseRepository;
         this.auditResponseRepository = auditResponseRepository;
         this.subattributeRepository = subattributeRepository;
     }
 
     @Transactional
-    public AttributeAnswerResponseDTO createAttributeResponse(AttributeResponseRequestDTO dto) {
+    public AttributeAnswerResponseDTO createAttributeResponse(SubattributeResponseRequestDTO dto) {
         AuditResponse auditResponse = auditResponseRepository.findById(dto.getAuditResponseId())
                 .orElseThrow(() -> new EntityNotFoundException("Audit response with ID %d not found".formatted(dto.getAuditResponseId())));
         Subattribute subattribute = subattributeRepository.findById(dto.getAttributeId())
@@ -42,12 +42,12 @@ public class AttributeResponseService {
                 .answerValue(dto.getAnswerValue())
                 .build();
 
-        return toDTO(attributeResponseRepository.save(subattributeResponse));
+        return toDTO(subattributeResponseRepository.save(subattributeResponse));
     }
 
     @Transactional(readOnly = true)
     public List<AttributeAnswerResponseDTO> getAttributeResponsesByAuditResponse(Long auditResponseId) {
-        return attributeResponseRepository.findByAuditResponse_AuditResponseId(auditResponseId)
+        return subattributeResponseRepository.findByAuditResponse_AuditResponseId(auditResponseId)
                 .stream()
                 .map(this::toDTO)
                 .toList();

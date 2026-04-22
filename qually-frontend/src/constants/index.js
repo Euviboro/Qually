@@ -1,30 +1,72 @@
+/** @module constants */
+
+/** Base URL for all API requests, injected by Vite from `.env`. */
 export const API_BASE = import.meta.env.VITE_API_BASE;
- 
+
+/**
+ * Display metadata for each COPC category enum value.
+ * Keys match the backend `CopcCategory` enum exactly.
+ *
+ * @type {Record<string, { label: string, bgVar: string, textVar: string, dotVar: string }>}
+ *
+ * @example
+ * const meta = COPC_CATEGORY_META["CUSTOMER"];
+ * // meta.label → "Customer Critical"
+ * // meta.bgVar  → "--color-copc-customer-bg"  (CSS variable name)
+ */
 export const COPC_CATEGORY_META = {
-  CUSTOMER:   { label: "Customer",   bgVar: "--color-copc-customer-bg",   textVar: "--color-copc-customer-text",   dotVar: "--color-copc-customer-dot"   },
-  BUSINESS:   { label: "Business",   bgVar: "--color-copc-business-bg",   textVar: "--color-copc-business-text",   dotVar: "--color-copc-business-dot"   },
-  COMPLIANCE: { label: "Compliance", bgVar: "--color-copc-compliance-bg", textVar: "--color-copc-compliance-text", dotVar: "--color-copc-compliance-dot" },
+  CUSTOMER:   { label: "Customer Critical",   bgVar: "--color-copc-customer-bg",    textVar: "--color-copc-customer-text",    dotVar: "--color-copc-customer-dot"   },
+  BUSINESS:   { label: "Business Critical",   bgVar: "--color-copc-business-bg",    textVar: "--color-copc-business-text",    dotVar: "--color-copc-business-dot"   },
+  COMPLIANCE: { label: "Compliance Critical", bgVar: "--color-copc-compliance-bg",  textVar: "--color-copc-compliance-text",  dotVar: "--color-copc-compliance-dot" },
 };
- 
+
+/**
+ * Display metadata for each `ProtocolStatus` enum value.
+ * Keys match the backend `ProtocolStatus` enum exactly.
+ *
+ * @type {Record<string, { label: string, bgVar: string, textVar: string }>}
+ */
+export const PROTOCOL_STATUS_META = {
+  DRAFT:     { label: "Draft",     bgVar: "--color-warning-bg",          textVar: "--color-warning-text"       },
+  FINALIZED: { label: "Finalized", bgVar: "--color-success-bg",          textVar: "--color-success-text"       },
+  ARCHIVED:  { label: "Archived",  bgVar: "--color-background-tertiary", textVar: "--color-text-tertiary"      },
+};
+
+/**
+ * Display metadata for each `AuditStatus` enum value.
+ * Keys match the backend `AuditStatus` enum exactly:
+ * `DRAFT`, `COMPLETED`, `DISPUTED`, `RESOLVED`.
+ *
+ * @type {Record<string, { label: string, bg: string, text: string }>}
+ */
 export const AUDIT_STATUS_META = {
-  IN_PROGRESS: { label: "In Progress", bg: "#E6F4FF", text: "#003D84" },
-  SUBMITTED:   { label: "Submitted",   bg: "#FFF0E6", text: "#7A3200" },
-  COMPLETED:   { label: "Completed",   bg: "#E1F5EE", text: "#085041" },
-  REVIEWED:    { label: "Reviewed",    bg: "#EDF2FA", text: "#001E4B" },
-  DISPUTED:    { label: "Disputed",    bg: "#FDECEA", text: "#7A1010" },
-  RESOLVED:    { label: "Resolved",    bg: "#E1F5EE", text: "#085041" },
+  DRAFT:     { label: "Draft",     bg: "var(--color-warning-bg)",            text: "var(--color-warning-text)"           },
+  COMPLETED: { label: "Completed", bg: "var(--color-success-bg)",            text: "var(--color-success-text)"           },
+  DISPUTED:  { label: "Disputed",  bg: "var(--color-error-bg)",              text: "var(--color-error-text)"             },
+  RESOLVED:  { label: "Resolved",  bg: "var(--color-background-tertiary)",   text: "var(--color-text-secondary)"         },
 };
- 
+
+/**
+ * Display metadata for each `AuditLogicType` enum value.
+ *
+ * @type {Record<string, { label: string, description: string }>}
+ */
 export const AUDIT_LOGIC_TYPE_META = {
   STANDARD:       { label: "Standard",       description: "Any NO marks the category as 0" },
   ACCOUNTABILITY: { label: "Accountability", description: "Only company-accountable NOs affect the score" },
 };
- 
+
+/**
+ * Rotating palette used to visually distinguish client cards on the Dashboard.
+ * All values are CSS variable references so they respect the design token system.
+ *
+ * @type {{ bg: string, text: string, dot: string }[]}
+ */
 export const CLIENT_ACCENT_COLORS = [
-  { bg: "#E6F4FF", text: "#002F65", dot: "#0096FF" },
-  { bg: "#EBF4FF", text: "#003D84", dot: "#006EF4" },
-  { bg: "#FFF0E6", text: "#7A3200", dot: "#FF8021" },
-  { bg: "#E1F5EE", text: "#085041", dot: "#1D9E75" },
-  { bg: "#EDF2FA", text: "#001E4B", dot: "#3A5272" },
-  { bg: "#E6EEFF", text: "#003D84", dot: "#0065B7" },
+  { bg: "var(--color-copc-customer-bg)",    text: "var(--color-copc-customer-text)",    dot: "var(--color-copc-customer-dot)"    },
+  { bg: "var(--color-background-accent)",   text: "var(--lsg-trust-navy-mid)",          dot: "var(--lsg-lean-blue-dark)"         },
+  { bg: "var(--color-copc-business-bg)",    text: "var(--color-copc-business-text)",    dot: "var(--color-copc-business-dot)"    },
+  { bg: "var(--color-copc-compliance-bg)",  text: "var(--color-copc-compliance-text)",  dot: "var(--color-copc-compliance-dot)"  },
+  { bg: "var(--color-background-tertiary)", text: "var(--color-text-secondary)",        dot: "var(--color-text-tertiary)"        },
+  { bg: "var(--color-background-accent)",   text: "var(--lsg-midnight)",                dot: "var(--lsg-lean-blue)"              },
 ];

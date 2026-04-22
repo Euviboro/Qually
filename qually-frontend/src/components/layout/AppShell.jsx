@@ -1,11 +1,26 @@
-import { Outlet, NavLink, useNavigate } from "react-router-dom";
+/**
+ * @module components/layout/AppShell
+ *
+ * Root layout shell shared by every page. Renders the top bar, sidebar
+ * navigation, and the main content outlet.
+ *
+ * The "Log session" top-bar button opens `StartSessionModal` rather than
+ * navigating directly to `/sessions/log`. The modal collects the client and
+ * protocol, then navigates with the selected protocol passed via router state
+ * so `LogSessionPage` can start immediately without a second fetch.
+ */
 
-// 1. Logo Component (Cleaned up with Tailwind)
+import { useState } from "react";
+import { Outlet, NavLink, useNavigate } from "react-router-dom";
+import { StartSessionModal } from "../ui/StartSessionModal";
+
+// ── Logo ──────────────────────────────────────────────────────
+
 function LSGLogoMark({ size = 30 }) {
   return (
-    <div 
-      className="flex items-center justify-center flex-shrink-0 bg-[#0096FF] rounded-[7px]"
-      style={{ width: size, height: size }} // Keeping dynamic size as inline is fine for specific pixels
+    <div
+      className="flex items-center justify-center flex-shrink-0 bg-lsg-blue rounded-[7px]"
+      style={{ width: size, height: size }}
     >
       <svg width={size * 0.6} height={size * 0.6} viewBox="0 0 16 16" fill="none">
         <path d="M3 13L3 6L9 3" stroke="white" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
@@ -15,7 +30,8 @@ function LSGLogoMark({ size = 30 }) {
   );
 }
 
-// 2. Navigation Collection (Functions that accept props for Tailwind)
+// ── Navigation items ──────────────────────────────────────────
+
 const NAV_ITEMS = [
   {
     to: "/",
@@ -54,29 +70,56 @@ const NAV_ITEMS = [
   },
 ];
 
+// ── Shell ─────────────────────────────────────────────────────
+
+/**
+ * Root layout component. Mounts the `StartSessionModal` so the "Log session"
+ * top-bar button can open it from any page without lifting state higher.
+ *
+ * On modal confirmation, navigates to `/sessions/log` and passes the selected
+ * `protocol` object via `location.state` so `LogSessionPage` can render
+ * immediately without a redundant network request.
+ *
+ * @returns {JSX.Element}
+ */
 export function AppShell() {
   const navigate = useNavigate();
+  const [sessionModalOpen, setSessionModalOpen] = useState(false);
+
+  /**
+   * Called by `StartSessionModal` when the user clicks "Start Session".
+   * Navigates to the log page carrying the full protocol object in router state.
+   *
+   * @param {import('../../api/protocols').AuditProtocolResponseDTO} protocol
+   */
+  const handleSessionConfirm = (protocol) => {
+    setSessionModalOpen(false);
+    navigate("/sessions/log", { state: { protocol } });
+  };
 
   return (
     <div className="flex flex-col min-h-screen font-sans">
-      
-      {/* ── TOP BAR ───────────────────────────────────────────── */}
-      <header className="sticky top-0 z-[100] flex items-center justify-between h-[var(--topbar-height)] px-6 bg-white border-b border-slate-200 shadow-sm">
-        
+
+      {/* ── TOP BAR ──────────────────────────────────────────── */}
+      <header className="sticky top-0 z-[100] flex items-center justify-between h-[var(--topbar-height)] px-6 bg-bg-primary border-b border-border-sec shadow-sm">
+
         {/* Brand */}
-        <button onClick={() => navigate("/")} className="flex items-center gap-2.5 p-0 bg-transparent border-none cursor-pointer">
+        <button
+          onClick={() => navigate("/")}
+          className="flex items-center gap-2.5 p-0 bg-transparent border-none cursor-pointer"
+        >
           <LSGLogoMark size={30} />
           <div className="flex flex-col text-left leading-[1.1]">
-            <span className="text-[13px] font-bold text-slate-900 tracking-tight">Qually</span>
-            <span className="text-[10px] text-slate-500 tracking-wide">by Lean Solutions Group</span>
+            <span className="text-[13px] font-bold text-text-pri tracking-tight">Qually</span>
+            <span className="text-[10px] text-text-ter tracking-wide">by Lean Solutions Group</span>
           </div>
         </button>
 
         {/* Global Actions */}
         <div className="flex items-center gap-2">
-          <button 
+          <button
             onClick={() => navigate("/protocols/new")}
-            className="flex items-center gap-1.5 px-3.5 py-1.5 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-md transition-all hover:border-slate-400 hover:bg-slate-50"
+            className="flex items-center gap-1.5 px-3.5 py-1.5 text-sm font-medium text-text-sec bg-bg-primary border border-border-sec rounded-md transition-all hover:border-border-pri hover:bg-bg-secondary"
           >
             <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
               <path d="M6 1v10M1 6h10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
@@ -84,9 +127,10 @@ export function AppShell() {
             New protocol
           </button>
 
-          <button 
-            onClick={() => navigate("/sessions/log")}
-            className="flex items-center gap-1.5 px-3.5 py-1.5 text-sm font-medium text-white bg-[#002F65] rounded-md transition-all hover:bg-[#001f44]"
+          {/* Opens the session modal instead of navigating directly */}
+          <button
+            onClick={() => setSessionModalOpen(true)}
+            className="flex items-center gap-1.5 px-3.5 py-1.5 text-sm font-medium text-white bg-lsg-navy rounded-md transition-all hover:bg-lsg-midnight"
           >
             <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
               <circle cx="6" cy="6" r="4.5" stroke="white" strokeWidth="1.5" />
@@ -95,18 +139,18 @@ export function AppShell() {
             Log session
           </button>
 
-          <div className="flex items-center justify-center w-8 h-8 ml-1 text-[11px] font-bold text-blue-600 bg-blue-50 border border-blue-100 rounded-full cursor-pointer font-mono">
+          <div className="flex items-center justify-center w-8 h-8 ml-1 text-[11px] font-bold text-lsg-blue bg-bg-accent border border-border-sec rounded-full cursor-pointer font-mono">
             EU
           </div>
         </div>
       </header>
 
-      {/* ── BODY ──────────────────────────────────────────────── */}
+      {/* ── BODY ─────────────────────────────────────────────── */}
       <div className="flex flex-1">
-        
+
         {/* Sidebar */}
-        <aside className="sticky top-[var(--topbar-height)] flex flex-col w-[var(--sidebar-width)] h-[calc(100vh-var(--topbar-height))] p-3 gap-1 bg-white border-r border-slate-200 overflow-y-auto shrink-0">
-          <p className="px-3 mb-1 text-[10px] font-semibold text-slate-400 uppercase tracking-widest">
+        <aside className="sticky top-[var(--topbar-height)] flex flex-col w-[var(--sidebar-width)] h-[calc(100vh-var(--topbar-height))] p-3 gap-1 bg-bg-primary border-r border-border-sec overflow-y-auto shrink-0">
+          <p className="px-3 mb-1 text-[10px] font-semibold text-text-ter uppercase tracking-widest">
             Navigation
           </p>
 
@@ -117,9 +161,9 @@ export function AppShell() {
               end={item.end}
               className={({ isActive }) =>
                 `flex items-center gap-3 px-3 py-2 rounded-lg transition-all duration-200 ${
-                  isActive 
-                    ? "bg-blue-50 text-blue-700 font-semibold" 
-                    : "text-slate-600 hover:bg-slate-100"
+                  isActive
+                    ? "bg-bg-accent text-lsg-blue-dark font-semibold"
+                    : "text-text-sec hover:bg-bg-secondary"
                 }`
               }
             >
@@ -130,10 +174,17 @@ export function AppShell() {
         </aside>
 
         {/* Page content */}
-        <main className="flex-1 min-w-0 bg-slate-50 overflow-y-auto">
+        <main className="flex-1 min-w-0 bg-bg-secondary overflow-y-auto">
           <Outlet />
         </main>
       </div>
+
+      {/* Session setup modal — mounted at shell level so the top-bar button works everywhere */}
+      <StartSessionModal
+        isOpen={sessionModalOpen}
+        onClose={() => setSessionModalOpen(false)}
+        onConfirm={handleSessionConfirm}
+      />
     </div>
   );
 }

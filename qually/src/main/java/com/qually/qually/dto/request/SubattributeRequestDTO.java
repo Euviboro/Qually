@@ -14,7 +14,7 @@ import java.util.List;
 public class SubattributeRequestDTO {
 
     @NotBlank(message = "Attribute text is required")
-    private String attributeText;
+    private String subattributeText;
 
     @NotNull(message = "Question ID is required", groups = OnIndividualSave.class)
     private Integer questionId;

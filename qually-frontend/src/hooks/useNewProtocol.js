@@ -1,36 +1,85 @@
+/** @module hooks/useNewProtocol */
+
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { getClients } from "../api/clients";
-import { createProtocol, finalizeProtocol } from "../api/protocols";
-import { createQuestion } from "../api/protocols";
+import { createProtocol } from "../api/protocols";
 
-const EMPTY_QUESTION = () => ({
+/**
+ * @typedef {Object} LocalQuestion
+ * @property {string}              id            - Ephemeral UUID used as React key.
+ * @property {string}              questionText
+ * @property {string}              category      - COPC category key (e.g. `"CUSTOMER"`).
+ * @property {boolean}             confirmed
+ * @property {LocalSubattribute[]} subattributes
+ */
+
+/**
+ * @typedef {Object} LocalSubattribute
+ * @property {string}   id
+ * @property {string}   subattributeText
+ * @property {string[]} subattributeOptions - Answer choice labels.
+ */
+
+/**
+ * @typedef {Object} UseNewProtocolResult
+ * @property {number|null} clientId
+ * @property {(id: number) => void} setClientId
+ * @property {string} protocolName
+ * @property {(name: string) => void} setProtocolName
+ * @property {string} version
+ * @property {(v: string) => void} setVersion
+ * @property {"STANDARD"|"ACCOUNTABILITY"|null} auditLogicType
+ * @property {(t: string) => void} setAuditLogicType
+ * @property {LocalQuestion[]} questions
+ * @property {import('../api/clients').ClientResponseDTO[]} clients
+ * @property {boolean} clientsLoading
+ * @property {boolean} canSave
+ * @property {boolean} saving
+ * @property {string|null} saveError
+ * @property {(id: string, updated: LocalQuestion) => void} updateQuestion
+ * @property {(id: string) => void} removeQuestion
+ * @property {() => void} addQuestion
+ * @property {(status?: "DRAFT"|"FINALIZED") => Promise<void>} handleSave
+ */
+
+/** @returns {LocalQuestion} */
+export const EMPTY_QUESTION = () => ({
   id: crypto.randomUUID(),
-  text: "",
+  questionText: "",
   category: "",
   confirmed: false,
   subattributes: [],
 });
 
-const EMPTY_ATTRIBUTE = () => ({
+/** @returns {LocalSubattribute} */
+export const EMPTY_ATTRIBUTE = () => ({
   id: crypto.randomUUID(),
-  title: "",
-  choices: ["", ""],
+  subattributeText: "",
+  subattributeOptions: ["", ""],
 });
 
-export { EMPTY_QUESTION, EMPTY_ATTRIBUTE };
-
+/**
+ * Manages all state for the New Protocol form.
+ *
+ * `auditLogicType` has been added as a required field, aligning with the
+ * {@code audit_logic_type NOT NULL} column on {@code audit_protocols}.
+ * `canSave` now requires it to be set alongside the other fields.
+ *
+ * @returns {UseNewProtocolResult}
+ */
 export function useNewProtocol() {
   const navigate = useNavigate();
 
-  const [clientId, setClientId]           = useState(null);
-  const [protocolName, setProtocolName]   = useState("");
-  const [version, setVersion]             = useState("1");
-  const [questions, setQuestions]         = useState([EMPTY_QUESTION()]);
-  const [clients, setClients]             = useState([]);
-  const [clientsLoading, setClientsLoading] = useState(true);
-  const [saving, setSaving]               = useState(false);
-  const [saveError, setSaveError]         = useState(null);
+  const [clientId,        setClientId]        = useState(null);
+  const [protocolName,    setProtocolName]     = useState("");
+  const [version,         setVersion]          = useState("1");
+  const [auditLogicType,  setAuditLogicType]   = useState(null);
+  const [questions,       setQuestions]        = useState([EMPTY_QUESTION()]);
+  const [clients,         setClients]          = useState([]);
+  const [clientsLoading,  setClientsLoading]   = useState(true);
+  const [saving,          setSaving]           = useState(false);
+  const [saveError,       setSaveError]        = useState(null);
 
   useEffect(() => {
     getClients()
@@ -39,7 +88,16 @@ export function useNewProtocol() {
       .finally(() => setClientsLoading(false));
   }, []);
 
-  const canSave = !!clientId && !!protocolName.trim() && questions.every((q) => q.confirmed);
+  /**
+   * All required fields must be filled and every question confirmed.
+   * `auditLogicType` is now part of this check.
+   */
+  const canSave =
+    !!clientId &&
+    !!protocolName.trim() &&
+    !!auditLogicType &&
+    questions.length > 0 &&
+    questions.every((q) => q.confirmed);
 
   const updateQuestion = (id, updated) =>
     setQuestions((qs) => qs.map((q) => (q.id === id ? updated : q)));
@@ -50,49 +108,50 @@ export function useNewProtocol() {
   const addQuestion = () =>
     setQuestions((qs) => [...qs, EMPTY_QUESTION()]);
 
-  const handleSave = async (finalize = false) => {
+  /**
+   * Serializes the form and POSTs to `/protocols`.
+   * Navigates to the new protocol's detail page on success.
+   *
+   * @param {"DRAFT"|"FINALIZED"} [status="DRAFT"]
+   */
+  const handleSave = async (status = "DRAFT") => {
     setSaving(true);
     setSaveError(null);
+
+    const payload = {
+      clientId,
+      protocolName:    protocolName.trim(),
+      protocolVersion: parseInt(version, 10) || 1,
+      protocolStatus:  status,
+      auditLogicType,
+      auditQuestions: questions.map((q) => ({
+        questionText: q.questionText,
+        category:     q.category,
+        subattributes: q.subattributes.map((a) => ({
+          subattributeText:    a.subattributeText,
+          subattributeOptions: a.subattributeOptions.map((opt) => ({ optionLabel: opt })),
+        })),
+      })),
+    };
+
     try {
-      const protocol = await createProtocol({
-        clientId,
-        protocolName: protocolName.trim(),
-        protocolVersion: parseInt(version, 10) || 1,
-      });
-
-      await Promise.all(
-        questions.map((q) =>
-          createQuestion({
-            protocolId: protocol.protocolId,
-            questionText: q.text,
-            category: q.category,
-            subattributes: q.subattributes.map((a) => ({
-              subattributeText: a.title,
-              options: a.choices.filter(Boolean).map((c) => ({ optionText: c })),
-            })),
-          })
-        )
-      );
-
-      if (finalize) await finalizeProtocol(protocol.protocolId);
-
-      navigate(finalize ? `/protocols/${protocol.protocolId}` : "/");
+      const result = await createProtocol(payload);
+      navigate(`/protocols/${result.protocolId}`);
     } catch (err) {
-      setSaveError(err.message);
+      setSaveError(err.message ?? "Something went wrong. Please try again.");
+    } finally {
       setSaving(false);
     }
   };
 
   return {
-    // form state
-    clientId, setClientId,
-    protocolName, setProtocolName,
-    version, setVersion,
+    clientId,       setClientId,
+    protocolName,   setProtocolName,
+    version,        setVersion,
+    auditLogicType, setAuditLogicType,
     questions,
-    // clients
-    clients, clientsLoading,
-    // actions
-    canSave, saving, saveError,
+    clients,        clientsLoading,
+    canSave,        saving,         saveError,
     updateQuestion, removeQuestion, addQuestion,
     handleSave,
   };

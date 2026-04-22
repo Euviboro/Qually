@@ -10,6 +10,14 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
+/**
+ * REST controller for {@link com.qually.qually.models.User} resources.
+ *
+ * <p>Path variable changed from {@code /{email}} to {@code /{id}} because
+ * the PK is now the auto-increment {@code user_id} (Integer), not the email.
+ * The query param for role filter is renamed to {@code roleName} to match
+ * the new {@code Role} entity's {@code roleName} field.</p>
+ */
 @RestController
 @RequestMapping("/api/users")
 public class UserController {
@@ -26,18 +34,19 @@ public class UserController {
     }
 
     @GetMapping
-    public ResponseEntity<List<UserResponseDTO>> getAllUsers(@RequestParam(required = false) String role) {
-        return ResponseEntity.ok(userService.getAllUsers(role));
+    public ResponseEntity<List<UserResponseDTO>> getAllUsers(
+            @RequestParam(required = false) String roleName) {
+        return ResponseEntity.ok(userService.getAllUsers(roleName));
     }
 
-    @GetMapping("/{email}")
-    public ResponseEntity<UserResponseDTO> getUserByEmail(@PathVariable String email) {
-        return ResponseEntity.ok(userService.getUserByEmail(email));
+    @GetMapping("/{id}")
+    public ResponseEntity<UserResponseDTO> getUserById(@PathVariable Integer id) {
+        return ResponseEntity.ok(userService.getUserById(id));
     }
 
-    @PutMapping("/{email}")
-    public ResponseEntity<UserResponseDTO> updateUser(@PathVariable String email,
+    @PutMapping("/{id}")
+    public ResponseEntity<UserResponseDTO> updateUser(@PathVariable Integer id,
                                                       @Valid @RequestBody UserUpdateRequestDTO dto) {
-        return ResponseEntity.ok(userService.updateUser(email, dto));
+        return ResponseEntity.ok(userService.updateUser(id, dto));
     }
 }

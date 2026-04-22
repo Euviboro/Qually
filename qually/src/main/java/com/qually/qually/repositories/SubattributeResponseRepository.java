@@ -7,6 +7,6 @@ import org.springframework.stereotype.Repository;
 import java.util.List;
 
 @Repository
-public interface AttributeResponseRepository extends JpaRepository<SubattributeResponse, Long> {
+public interface SubattributeResponseRepository extends JpaRepository<SubattributeResponse, Long> {
     List<SubattributeResponse> findByAuditResponse_AuditResponseId(Long auditResponseId);
 }

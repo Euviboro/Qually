@@ -1,24 +1,81 @@
+/** @module api/protocols */
+
 import { api } from "./apiClient";
 
-// Protocols
-export const getProtocols = (clientId) => 
+/**
+ * @typedef {Object} AuditProtocolRequestDTO
+ * @property {string}                    protocolName
+ * @property {number}                    protocolVersion
+ * @property {"DRAFT"|"FINALIZED"|"ARCHIVED"} [protocolStatus]
+ * @property {number}                    clientId
+ * @property {"STANDARD"|"ACCOUNTABILITY"} auditLogicType - Required. Scoring strategy for all sessions.
+ * @property {import('./questions').AuditQuestionRequestDTO[]} [auditQuestions]
+ */
+
+/**
+ * @typedef {Object} AuditProtocolResponseDTO
+ * @property {number}                    protocolId
+ * @property {string}                    protocolName
+ * @property {number}                    protocolVersion
+ * @property {"DRAFT"|"FINALIZED"|"ARCHIVED"} protocolStatus
+ * @property {"STANDARD"|"ACCOUNTABILITY"} auditLogicType - Scoring strategy for all sessions of this protocol.
+ * @property {number}                    clientId
+ * @property {string}                    clientName
+ * @property {import('./questions').AuditQuestionResponseDTO[]} auditQuestions
+ */
+
+/**
+ * Fetches all protocols, optionally filtered by client.
+ *
+ * @param {number} [clientId]
+ * @returns {Promise<AuditProtocolResponseDTO[]>}
+ */
+export const getProtocols = (clientId) =>
   api.get(clientId ? `/protocols?clientId=${clientId}` : "/protocols");
 
-export const getProtocolById = (id) => 
+/**
+ * Fetches a single protocol by ID, including all nested questions and subattributes.
+ *
+ * @param {number|string} id
+ * @returns {Promise<AuditProtocolResponseDTO>}
+ */
+export const getProtocolById = (id) =>
   api.get(`/protocols/${id}`);
 
-export const createProtocol = (data) => 
+/**
+ * Creates a new protocol (deep-save: protocol + questions + subattributes + options).
+ *
+ * @param {AuditProtocolRequestDTO} data
+ * @returns {Promise<AuditProtocolResponseDTO>}
+ */
+export const createProtocol = (data) =>
   api.post("/protocols", data);
 
-export const updateProtocol = (id, data) => 
+/**
+ * Replaces an existing protocol's data in full.
+ *
+ * @param {number|string} id
+ * @param {AuditProtocolRequestDTO} data
+ * @returns {Promise<AuditProtocolResponseDTO>}
+ */
+export const updateProtocol = (id, data) =>
   api.put(`/protocols/${id}`, data);
 
-export const finalizeProtocol = (protocolId) => 
+/**
+ * Transitions a protocol from DRAFT → FINALIZED.
+ *
+ * @param {number|string} protocolId
+ * @returns {Promise<AuditProtocolResponseDTO>}
+ */
+export const finalizeProtocol = (protocolId) =>
   api.patch(`/protocols/${protocolId}/finalize`);
 
-// Questions (Ideally these should move to src/api/questions.js eventually)
-export const getQuestions = (protocolId) => 
-  api.get(`/questions?protocolId=${protocolId}`);
-
-export const createQuestion = (data) => 
-  api.post("/questions", data);
+/**
+ * Updates only the protocol name (DRAFT only).
+ *
+ * @param {number|string} id
+ * @param {string}        newName
+ * @returns {Promise<AuditProtocolResponseDTO>}
+ */
+export const updateProtocolName = (id, newName) =>
+  api.patch(`/protocols/${id}/name`, { protocolName: newName });

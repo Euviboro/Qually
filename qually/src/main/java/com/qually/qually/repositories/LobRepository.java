@@ -8,11 +8,14 @@ import org.springframework.stereotype.Repository;
 import java.util.List;
 import java.util.Optional;
 
+/**
+ * Repository for {@link Lob}.
+ *
+ * <p>{@code findByTeamLeader_UserEmail} removed — the {@code lobs} table no
+ * longer has a team leader column.</p>
+ */
 @Repository
 public interface LobRepository extends JpaRepository<Lob, Integer> {
     List<Lob> findByClient(Client client);
-
-    List<Lob> findByTeamLeader_UserEmail(String userEmail);
-
     Optional<Lob> findByLobNameAndClient_ClientId(String lobName, Integer clientId);
 }

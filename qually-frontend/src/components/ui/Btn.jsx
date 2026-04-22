@@ -1,10 +1,31 @@
+/**
+ * @module components/ui/Btn
+ *
+ * General-purpose button component that maps a semantic `variant` and `size`
+ * to the Qually design-token utility classes defined in `index.css`.
+ */
+
+/**
+ * @typedef {"primary"|"secondary"|"ghost"|"danger"|"success"} BtnVariant
+ * @typedef {"sm"|"md"} BtnSize
+ */
+
+/**
+ * @param {Object}       props
+ * @param {React.ReactNode} props.children  - Button label / content.
+ * @param {() => void}   [props.onClick]    - Click handler. Not called when `disabled`.
+ * @param {BtnVariant}   [props.variant="secondary"] - Visual style.
+ * @param {BtnSize}      [props.size="md"]  - Padding / font-size scale.
+ * @param {boolean}      [props.disabled]   - Suppresses clicks and applies reduced opacity.
+ * @param {string}       [props.className]  - Extra Tailwind classes for one-off overrides.
+ */
 export function Btn({ children, onClick, variant = "secondary", disabled, size = "md", className = "" }) {
   const variants = {
-    primary:   "bg-blue-600 text-white hover:bg-blue-700 shadow-sm",
-    secondary: "bg-gray-50 text-gray-900 border border-gray-200 hover:bg-gray-100",
-    ghost:     "bg-transparent text-gray-500 border border-gray-200 hover:bg-gray-50",
-    danger:    "bg-red-50 text-red-600 hover:bg-red-100",
-    success:   "bg-green-50 text-green-600 hover:bg-green-100",
+    primary:   "bg-lsg-blue text-white hover:bg-lsg-blue-dark shadow-sm",
+    secondary: "bg-bg-secondary text-text-pri border border-border-sec hover:bg-bg-tertiary",
+    ghost:     "bg-transparent text-text-ter border border-border-sec hover:bg-bg-secondary",
+    danger:    "bg-error-surface text-error-on hover:opacity-90",
+    success:   "bg-success-surface text-success-on hover:opacity-90",
   };
   const sizes = {
     sm: "text-xs px-3 py-1.5",

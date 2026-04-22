@@ -6,10 +6,13 @@ import lombok.Setter;
 
 import java.time.LocalDateTime;
 
+/**
+ * Payload for partially updating an existing audit session.
+ * All fields are optional — only non-null fields are applied.
+ */
 @Getter
 @Setter
 public class AuditSessionUpdateRequestDTO {
-
     private AuditStatus auditStatus;
     private String comments;
     private LocalDateTime submittedAt;

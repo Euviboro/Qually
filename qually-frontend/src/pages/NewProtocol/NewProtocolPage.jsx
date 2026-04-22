@@ -1,3 +1,11 @@
+/**
+ * @module pages/NewProtocol/NewProtocolPage
+ *
+ * Form for creating a new audit protocol.
+ * An Audit Logic Type selector has been added — it is now a required field
+ * because `audit_logic_type NOT NULL` lives on `audit_protocols` in the DB.
+ */
+
 import { useNavigate } from "react-router-dom";
 import { useNewProtocol } from "../../hooks/useNewProtocol";
 import { Btn } from "../../components/ui/Btn";
@@ -6,31 +14,36 @@ import { TextInput } from "../../components/ui/TextInput";
 import { SectionCard } from "../../components/ui/SectionCard";
 import { ClientSelector } from "./ClientSelector";
 import { QuestionCard } from "./QuestionCard";
+import { AUDIT_LOGIC_TYPE_META } from "../../constants";
 
 export default function NewProtocolPage() {
   const navigate = useNavigate();
   const {
-    clientId, setClientId,
-    protocolName, setProtocolName,
-    version, setVersion,
+    clientId,        setClientId,
+    protocolName,    setProtocolName,
+    version,         setVersion,
+    auditLogicType,  setAuditLogicType,
     questions,
-    clients, clientsLoading,
-    canSave, saving, saveError,
-    updateQuestion, removeQuestion, addQuestion,
+    clients,         clientsLoading,
+    canSave,         saving,           saveError,
+    updateQuestion,  removeQuestion,   addQuestion,
     handleSave,
   } = useNewProtocol();
+
+  const logicTypes = Object.entries(AUDIT_LOGIC_TYPE_META).map(([value, m]) => ({ value, ...m }));
 
   return (
     <div className="py-10 px-6 max-w-3xl mx-auto">
       <header className="mb-10">
-        <h1 className="text-4xl font-extrabold text-gray-900 tracking-tight mb-1">New Protocol</h1>
-        <p className="text-gray-500">Define the protocol, add questions, and save as draft or finalize.</p>
+        <h1 className="text-4xl font-extrabold text-text-pri tracking-tight mb-1">New Protocol</h1>
+        <p className="text-text-ter">Define the protocol, add questions, and save as draft or finalize.</p>
       </header>
 
       {/* Protocol details */}
       <SectionCard className="mb-6">
-        <h2 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-4">Protocol Details</h2>
+        <h2 className="text-[10px] font-bold text-text-ter uppercase tracking-widest mb-4">Protocol Details</h2>
         <div className="flex flex-col gap-5">
+
           <div>
             <Label required>Client</Label>
             <ClientSelector
@@ -40,6 +53,7 @@ export default function NewProtocolPage() {
               loading={clientsLoading}
             />
           </div>
+
           <div className="flex gap-4">
             <div className="flex-1">
               <Label required>Protocol Name</Label>
@@ -58,14 +72,45 @@ export default function NewProtocolPage() {
               />
             </div>
           </div>
+
+          {/* Audit Logic Type — required, stored on the protocol */}
+          <div>
+            <Label required>Audit Logic Type</Label>
+            <p className="text-xs text-text-ter mb-3">
+              Determines how NO answers affect the final score for all sessions using this protocol.
+            </p>
+            <div className="flex flex-col sm:flex-row gap-3">
+              {logicTypes.map((lt) => {
+                const isActive = auditLogicType === lt.value;
+                return (
+                  <button
+                    key={lt.value}
+                    type="button"
+                    onClick={() => setAuditLogicType(lt.value)}
+                    className={[
+                      "flex-1 text-left px-4 py-3 rounded-lg border-2 transition-all",
+                      isActive
+                        ? "border-lsg-blue bg-bg-accent"
+                        : "border-border-sec hover:border-border-pri bg-bg-primary",
+                    ].join(" ")}
+                  >
+                    <p className={`text-sm font-bold mb-0.5 ${isActive ? "text-lsg-blue-dark" : "text-text-pri"}`}>
+                      {lt.label}
+                    </p>
+                    <p className="text-xs text-text-ter">{lt.description}</p>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
         </div>
       </SectionCard>
 
       {/* Questions */}
       <div className="space-y-4 mb-10">
         <div className="flex items-center justify-between px-1">
-          <h2 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Questions</h2>
-          <span className="text-xs text-gray-400 font-medium">
+          <h2 className="text-[10px] font-bold text-text-ter uppercase tracking-widest">Questions</h2>
+          <span className="text-xs text-text-ter font-medium">
             {questions.filter((q) => q.confirmed).length} confirmed ·{" "}
             {questions.filter((q) => !q.confirmed).length} pending
           </span>
@@ -84,27 +129,26 @@ export default function NewProtocolPage() {
 
         <button
           onClick={addQuestion}
-          className="w-full py-4 rounded-xl border-2 border-dashed border-gray-200 text-gray-400 font-bold hover:border-blue-300 hover:text-blue-500 transition-all flex items-center justify-center gap-2 group"
+          className="w-full py-4 rounded-xl border-2 border-dashed border-border-sec text-text-ter font-bold hover:border-lsg-blue hover:text-lsg-blue transition-all flex items-center justify-center gap-2 group"
         >
-          <span className="text-xl group-hover:scale-125 transition-transform">+</span> Add Another Question
+          <span className="text-xl group-hover:scale-125 transition-transform">+</span>
+          Add Another Question
         </button>
       </div>
 
-      {/* Save error */}
       {saveError && (
-        <div className="mb-4 px-4 py-3 bg-red-50 border border-red-100 text-red-600 text-sm rounded-lg">
+        <div className="mb-4 px-4 py-3 bg-error-surface border border-[rgba(226,75,74,0.2)] text-error-on text-sm rounded-xl">
           {saveError}
         </div>
       )}
 
-      {/* Footer */}
-      <footer className="sticky bottom-6 bg-white/80 backdrop-blur-md p-4 border border-gray-100 rounded-2xl shadow-xl flex items-center justify-between">
+      <footer className="sticky bottom-6 bg-bg-primary/80 backdrop-blur-md p-4 border border-border-ter rounded-2xl shadow-lg flex items-center justify-between">
         <Btn variant="ghost" onClick={() => navigate("/")}>Cancel</Btn>
         <div className="flex gap-3">
-          <Btn variant="secondary" onClick={() => handleSave(false)} disabled={saving || !canSave}>
+          <Btn variant="secondary" onClick={() => handleSave("DRAFT")} disabled={saving || !canSave}>
             Save Draft
           </Btn>
-          <Btn variant="primary" onClick={() => handleSave(true)} disabled={saving || !canSave}>
+          <Btn variant="primary" onClick={() => handleSave("FINALIZED")} disabled={saving || !canSave}>
             {saving ? "Saving…" : "Finalize Protocol"}
           </Btn>
         </div>

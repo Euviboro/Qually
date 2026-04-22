@@ -7,7 +7,7 @@ import lombok.Setter;
 
 @Getter
 @Setter
-public class AttributeResponseRequestDTO {
+public class SubattributeResponseRequestDTO {
 
     @NotNull(message = "Audit response ID is required")
     private Long auditResponseId;

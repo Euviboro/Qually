@@ -2,8 +2,8 @@ package com.qually.qually.services;
 
 import com.qually.qually.dto.request.SubattributeRequestDTO;
 import com.qually.qually.dto.response.SubattributeResponseDTO;
+import com.qually.qually.mappers.SubattributeMapper;
 import com.qually.qually.models.Subattribute;
-import com.qually.qually.models.SubattributeOption;
 import com.qually.qually.models.AuditQuestion;
 import com.qually.qually.repositories.SubattributeRepository;
 import com.qually.qually.repositories.AuditQuestionRepository;
@@ -11,41 +11,29 @@ import jakarta.persistence.EntityNotFoundException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.ArrayList;
 import java.util.List;
 
 @Service
-public class AttributeService {
+public class SubattributeService {
 
     private final SubattributeRepository subattributeRepository;
     private final AuditQuestionRepository auditQuestionRepository;
+    private final SubattributeMapper subattributeMapper;
 
-    public AttributeService(SubattributeRepository subattributeRepository, AuditQuestionRepository auditQuestionRepository) {
+    public SubattributeService(SubattributeRepository subattributeRepository, AuditQuestionRepository auditQuestionRepository, SubattributeMapper subattributeMapper) {
         this.subattributeRepository = subattributeRepository;
         this.auditQuestionRepository = auditQuestionRepository;
+        this.subattributeMapper = subattributeMapper;
     }
 
     @Transactional
-    public SubattributeResponseDTO createAttribute(SubattributeRequestDTO dto) {
+    public SubattributeResponseDTO createSubattribute(SubattributeRequestDTO dto) {
         AuditQuestion question = auditQuestionRepository.findById(dto.getQuestionId())
                 .orElseThrow(() -> new EntityNotFoundException("Question with ID %d not found".formatted(dto.getQuestionId())));
 
-        Subattribute subattribute = Subattribute.builder()
-                .subattributeText(dto.getAttributeText())
-                .auditQuestion(question)
-                .subattributeOptions(new ArrayList<>())
-                .build();
-        if (dto.getSubattributeOptions() != null) {
-            dto.getSubattributeOptions().forEach(oDTO ->{
-                SubattributeOption subattributeOption = SubattributeOption.builder()
-                        .optionLabel(oDTO.getOptionLabel())
-                        .subattribute(subattribute)
-                        .build();
-                subattribute.getSubattributeOptions().add(subattributeOption);
-            });
-        }
+        Subattribute subattribute = subattributeMapper.toEntity(dto, question);
 
-        return toDTO(subattributeRepository.save(subattribute));
+        return subattributeMapper.toDTO(subattributeRepository.save(subattribute));
     }
 
     @Transactional(readOnly = true)
@@ -70,7 +58,7 @@ public class AttributeService {
         AuditQuestion question = auditQuestionRepository.findById(dto.getQuestionId())
                 .orElseThrow(() -> new EntityNotFoundException("Question with ID " + dto.getQuestionId() + " not found"));
 
-        subattribute.setSubattributeText(dto.getAttributeText());
+        subattribute.setSubattributeText(dto.getSubattributeText());
         subattribute.setAuditQuestion(question);
         return toDTO(subattributeRepository.save(subattribute));
     }

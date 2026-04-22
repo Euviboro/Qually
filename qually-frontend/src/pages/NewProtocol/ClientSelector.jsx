@@ -18,9 +18,9 @@ export function ClientSelector({ clients, value, onChange, loading }) {
     <div ref={ref} className="relative">
       <button
         onClick={() => setOpen((o) => !o)}
-        className={`w-full px-3 py-2 text-base rounded-md border flex items-center justify-between transition-all bg-white
-        ${open ? "border-blue-500 ring-3 ring-blue-500/10" : "border-gray-200"}
-        ${selected ? "text-gray-900" : "text-gray-400"}`}
+        className={`w-full px-3 py-2 text-base rounded-md border flex items-center justify-between transition-all bg-bg-primary
+        ${open ? "border-lsg-blue ring-3 ring-lsg-blue/10" : "border-border-sec"}
+        ${selected ? "text-text-pri" : "text-text-ter"}`}
       >
         <span>{loading ? "Loading clients…" : selected ? selected.clientName : "Select a client"}</span>
         <svg
@@ -32,13 +32,13 @@ export function ClientSelector({ clients, value, onChange, loading }) {
       </button>
 
       {open && (
-        <div className="absolute top-full mt-1.5 left-0 right-0 bg-white border border-gray-200 rounded-md shadow-lg z-50 overflow-hidden max-h-64 overflow-y-auto">
+        <div className="absolute top-full mt-1.5 left-0 right-0 bg-bg-primary border border-border-sec rounded-md shadow-md z-50 overflow-hidden max-h-64 overflow-y-auto">
           {clients.map((c) => (
             <button
               key={c.clientId}
               onClick={() => { onChange(c.clientId); setOpen(false); }}
               className={`w-full px-3.5 py-2.5 text-sm text-left flex items-center gap-2 transition-colors
-              ${c.clientId === value ? "bg-blue-50 text-blue-600 font-semibold" : "text-gray-700 hover:bg-gray-50"}`}
+              ${c.clientId === value ? "bg-bg-accent text-lsg-blue-dark font-semibold" : "text-text-sec hover:bg-bg-secondary"}`}
             >
               <div className="w-3">
                 {c.clientId === value && (

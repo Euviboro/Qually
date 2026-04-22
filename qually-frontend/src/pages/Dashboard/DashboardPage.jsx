@@ -24,17 +24,15 @@ export default function DashboardPage() {
       <header className="mb-8 flex flex-wrap items-end justify-between gap-4">
         <div className="flex flex-col">
           <div className="flex items-center gap-3 mb-1">
-            <h1 className="text-3xl font-bold text-gray-900 tracking-tight leading-none">
-              Clients
-            </h1>
+            <h1 className="text-3xl font-bold text-text-pri tracking-tight leading-none">Clients</h1>
             <button
               onClick={() => setIsAddModalOpen(true)}
-              className="px-3 py-1 text-sm font-semibold bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors shadow-sm"
+              className="px-3 py-1 text-sm font-semibold bg-lsg-blue text-white rounded-md hover:bg-lsg-blue-dark transition-colors shadow-sm"
             >
               + Add
             </button>
           </div>
-          <p className="text-gray-500 text-base">
+          <p className="text-text-ter text-base">
             {loading
               ? "Loading data..."
               : `${clients.length} client${clients.length !== 1 ? "s" : ""} · click a card to view protocols`}
@@ -44,7 +42,7 @@ export default function DashboardPage() {
         {/* Search */}
         <div className="relative">
           <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none">
-            <svg className="w-3.5 h-3.5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <svg className="w-3.5 h-3.5 text-text-ter" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
             </svg>
           </div>
@@ -53,7 +51,7 @@ export default function DashboardPage() {
             placeholder="Search clients..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="w-60 pl-9 pr-4 py-2 text-sm bg-white border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all shadow-sm"
+            className="w-60 pl-9 pr-4 py-2 text-sm bg-bg-primary border border-border-sec rounded-md focus:outline-none focus:ring-2 focus:ring-lsg-blue/20 focus:border-lsg-blue transition-all shadow-sm placeholder:text-text-ter text-text-pri"
           />
         </div>
       </header>
@@ -61,8 +59,8 @@ export default function DashboardPage() {
       {/* Loading */}
       {loading && (
         <div className="text-center py-20">
-          <div className="inline-flex items-center gap-3 text-gray-400">
-            <div className="w-5 h-5 border-2 border-gray-200 border-t-blue-600 rounded-full animate-spin" />
+          <div className="inline-flex items-center gap-3 text-text-ter">
+            <div className="w-5 h-5 border-2 border-border-sec border-t-lsg-blue rounded-full animate-spin" />
             <span>Loading clients...</span>
           </div>
         </div>
@@ -70,7 +68,7 @@ export default function DashboardPage() {
 
       {/* Error */}
       {error && (
-        <div className="text-center py-16 text-red-500 bg-red-50 rounded-xl border border-red-100">
+        <div className="text-center py-16 text-error-on bg-error-surface rounded-xl border border-[rgba(226,75,74,0.2)]">
           {error} — Make sure the backend is running on port 8080.
         </div>
       )}
@@ -90,14 +88,13 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* Empty state — only after loading, no error, truly nothing */}
+      {/* Empty state */}
       {!loading && !error && filtered.length === 0 && (
-        <div className="text-center py-20 text-gray-400">
+        <div className="text-center py-20 text-text-ter">
           {search ? "No clients match your search." : "No clients yet. Add one to get started."}
         </div>
       )}
 
-      {/* Modal */}
       <AddClientModal
         isOpen={isAddModalOpen}
         onClose={() => setIsAddModalOpen(false)}
