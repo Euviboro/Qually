@@ -3,14 +3,9 @@
  *
  * Two-step modal that collects the client and protocol for a new audit session.
  *
- * Flow:
- * 1. The user selects a client from a searchable list of all clients.
- * 2. Once a client is selected, its FINALIZED protocols are fetched.
- *    If the client has exactly one protocol it is auto-selected.
- * 3. Clicking "Start Session" calls `onConfirm` with the selected protocol
- *    object, then the parent navigates to the LogSessionPage.
- *
- * Only FINALIZED protocols are shown — drafts cannot be audited.
+ * Change: protocol version number removed from option labels.
+ * The version added noise without useful context in the dropdown since
+ * only FINALIZED protocols are shown and there is typically one per client.
  */
 
 import { useState, useEffect } from "react";
@@ -21,27 +16,20 @@ import { SearchableSelect } from "./SearchableSelect";
 /**
  * @param {Object}   props
  * @param {boolean}  props.isOpen
- *   Controls visibility. Returns `null` when `false`.
  * @param {() => void} props.onClose
- *   Called when the user dismisses the modal.
  * @param {(protocol: import('../../api/protocols').AuditProtocolResponseDTO) => void} props.onConfirm
- *   Called with the selected protocol object once the user clicks "Start Session".
- *   The parent is responsible for navigation.
  */
 export function StartSessionModal({ isOpen, onClose, onConfirm }) {
-  // ── Client state ───────────────────────────────────────────
   const [clients,        setClients]        = useState([]);
   const [clientsLoading, setClientsLoading] = useState(true);
   const [clientsError,   setClientsError]   = useState(null);
   const [selectedClient, setSelectedClient] = useState(null);
 
-  // ── Protocol state ─────────────────────────────────────────
   const [protocols,        setProtocols]        = useState([]);
   const [protocolsLoading, setProtocolsLoading] = useState(false);
   const [protocolsError,   setProtocolsError]   = useState(null);
   const [selectedProtocol, setSelectedProtocol] = useState(null);
 
-  // ── Fetch clients on mount ─────────────────────────────────
   useEffect(() => {
     if (!isOpen) return;
     setClientsLoading(true);
@@ -52,34 +40,26 @@ export function StartSessionModal({ isOpen, onClose, onConfirm }) {
       .finally(() => setClientsLoading(false));
   }, [isOpen]);
 
-  // ── Fetch protocols whenever the selected client changes ───
   useEffect(() => {
     if (!selectedClient) {
       setProtocols([]);
       setSelectedProtocol(null);
       return;
     }
-
     setProtocolsLoading(true);
     setProtocolsError(null);
     setSelectedProtocol(null);
 
     getProtocols(selectedClient)
       .then((all) => {
-        // Only FINALIZED protocols can be audited
         const finalized = all.filter((p) => p.protocolStatus === "FINALIZED");
         setProtocols(finalized);
-
-        // Auto-select when there is exactly one option
-        if (finalized.length === 1) {
-          setSelectedProtocol(finalized[0].protocolId);
-        }
+        if (finalized.length === 1) setSelectedProtocol(finalized[0].protocolId);
       })
       .catch((err) => setProtocolsError(err.message))
       .finally(() => setProtocolsLoading(false));
   }, [selectedClient]);
 
-  // ── Reset when the modal closes ────────────────────────────
   useEffect(() => {
     if (!isOpen) {
       setSelectedClient(null);
@@ -90,7 +70,6 @@ export function StartSessionModal({ isOpen, onClose, onConfirm }) {
     }
   }, [isOpen]);
 
-  // ── Escape key ─────────────────────────────────────────────
   useEffect(() => {
     if (!isOpen) return;
     const handler = (e) => { if (e.key === "Escape") onClose(); };
@@ -100,30 +79,24 @@ export function StartSessionModal({ isOpen, onClose, onConfirm }) {
 
   if (!isOpen) return null;
 
-  // ── Derived data ───────────────────────────────────────────
-
-  /** Options shaped for `SearchableSelect`. */
   const clientOptions = clients.map((c) => ({
     value: c.clientId,
     label: c.clientName,
   }));
 
+  // Protocol version removed from label — name alone is sufficient
   const protocolOptions = protocols.map((p) => ({
     value: p.protocolId,
-    label: `${p.protocolName} (v${p.protocolVersion})`,
+    label: p.protocolName,
   }));
 
-  /** The full protocol object for the currently selected protocol ID. */
   const protocolObject = protocols.find((p) => p.protocolId === selectedProtocol) ?? null;
-
   const canStart = Boolean(selectedClient && selectedProtocol && protocolObject);
 
   const handleConfirm = () => {
     if (!canStart) return;
     onConfirm(protocolObject);
   };
-
-  // ── Render ─────────────────────────────────────────────────
 
   return (
     <div
@@ -157,8 +130,6 @@ export function StartSessionModal({ isOpen, onClose, onConfirm }) {
 
         {/* Body */}
         <div className="flex flex-col gap-5">
-
-          {/* Client selector */}
           <div>
             <label className="block text-xs font-bold text-text-sec uppercase tracking-wider mb-2">
               Client <span className="text-lsg-blue">*</span>
@@ -177,7 +148,6 @@ export function StartSessionModal({ isOpen, onClose, onConfirm }) {
             )}
           </div>
 
-          {/* Protocol selector — only shown once a client is chosen */}
           <div>
             <label className={`block text-xs font-bold uppercase tracking-wider mb-2 transition-colors ${selectedClient ? "text-text-sec" : "text-text-ter"}`}>
               Protocol <span className="text-lsg-blue">*</span>
@@ -192,7 +162,6 @@ export function StartSessionModal({ isOpen, onClose, onConfirm }) {
               disabled={!selectedClient || protocolsLoading}
               emptyMessage="No finalized protocols for this client"
             />
-            {/* Contextual hints */}
             {selectedClient && !protocolsLoading && protocols.length === 0 && !protocolsError && (
               <p className="mt-1.5 text-xs text-text-ter">
                 This client has no finalized protocols yet.

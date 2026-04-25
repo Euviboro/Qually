@@ -195,7 +195,7 @@ export default function LogSessionPage() {
               Interaction ID <span className="text-lsg-blue">*</span>
             </label>
             <input type="text" value={meta.interactionId} onChange={(e) => setMeta("interactionId", e.target.value)}
-              placeholder="e.g. CALL-2024-00123"
+              placeholder="ID12345678"
               className="w-full px-3 py-2 text-sm rounded-md border border-border-sec bg-bg-primary text-text-pri placeholder:text-text-ter outline-none focus:border-lsg-blue transition-all" />
           </div>
 

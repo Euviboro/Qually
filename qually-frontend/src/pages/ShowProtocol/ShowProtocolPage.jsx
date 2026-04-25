@@ -1,3 +1,17 @@
+/**
+ * @module pages/ShowProtocol/ShowProtocolPage
+ *
+ * Displays and manages a specific Audit Protocol.
+ *
+ * Header changes:
+ * - Status badge shown only for DRAFT and ARCHIVED — FINALIZED protocols
+ *   have no badge (two action buttons communicate the state instead).
+ * - "View Results" button added — navigates to /results?protocolId=:id.
+ * - "Log Session" button added (FINALIZED only) — navigates directly to
+ *   /sessions/log with the protocol pre-loaded in router state, bypassing
+ *   the StartSessionModal client/protocol picker.
+ */
+
 import { useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { createAuditQuestion, updateAuditQuestion } from "../../api/questions";
@@ -5,15 +19,6 @@ import { finalizeProtocol, updateProtocolName } from "../../api/protocols";
 import { useProtocol } from "../../hooks/useProtocol";
 import { QuestionEditModal } from "../../components/ui/QuestionEditModal";
 
-/**
- * Produces a blank question object for the "Add Question" modal.
- * `questionId: null` signals to `useQuestionForm` that this is a create,
- * not an edit. `protocolId` is populated immediately so the POST body is
- * complete without any transformation in the handler.
- *
- * @param {number|string} protocolId - The current protocol's numeric ID.
- * @returns {import('../../hooks/useQuestionForm').QuestionFormData}
- */
 const blankQuestion = (protocolId) => ({
   questionId:    null,
   protocolId:    parseInt(protocolId, 10),
@@ -22,31 +27,19 @@ const blankQuestion = (protocolId) => ({
   subattributes: [],
 });
 
-/**
- * Page component for displaying and managing a specific Audit Protocol.
- * Includes inline-editing for the protocol name, adding/editing questions,
- * and the draft/finalization workflow.
- *
- * @returns {JSX.Element}
- */
 export default function ShowProtocolPage() {
   const { id } = useParams();
   const navigate = useNavigate();
 
   const { protocol, loading, error, refetch } = useProtocol(id);
 
-  // ── Edit-question modal state ──────────────────────────────
-  const [editingQuestion, setEditingQuestion] = useState(null);
-  const [editSaveError,   setEditSaveError]   = useState(null);
-
-  // ── Add-question modal state ───────────────────────────────
+  const [editingQuestion,  setEditingQuestion]  = useState(null);
+  const [editSaveError,    setEditSaveError]    = useState(null);
   const [isAddingQuestion, setIsAddingQuestion] = useState(false);
   const [addSaveError,     setAddSaveError]     = useState(null);
-
-  // ── Inline name-editor state ───────────────────────────────
-  const [isEditingName, setIsEditingName] = useState(false);
-  const [editedName,    setEditedName]    = useState("");
-  const [isSavingName,  setIsSavingName]  = useState(false);
+  const [isEditingName,    setIsEditingName]    = useState(false);
+  const [editedName,       setEditedName]       = useState("");
+  const [isSavingName,     setIsSavingName]     = useState(false);
 
   // ── Name handlers ──────────────────────────────────────────
 
@@ -113,25 +106,13 @@ export default function ShowProtocolPage() {
     setAddSaveError(null);
   };
 
-  /**
-   * Creates a new question via POST /questions.
-   * `formData.protocolId` is already populated by `blankQuestion(id)` so no
-   * extra argument is needed — just pass formData straight to the API.
-   *
-   * @param {import('../../hooks/useQuestionForm').QuestionFormData} formData
-   */
   const handleCreateQuestion = async (formData) => {
     try {
-      // FIX: was createAuditQuestion(id, formData) — the function takes one
-      // argument (the DTO). Passing `id` as the first arg treated it as the
-      // DTO and silently dropped formData, sending the wrong body to the server.
       await createAuditQuestion(formData);
       await refetch();
       setIsAddingQuestion(false);
       setAddSaveError(null);
     } catch (err) {
-      // FIX: was alert() — errors should surface inside the modal so the user
-      // can see what went wrong without losing their draft input.
       setAddSaveError(err.message);
     }
   };
@@ -147,6 +128,12 @@ export default function ShowProtocolPage() {
         alert("Error finalizing protocol: " + err.message);
       }
     }
+  };
+
+  // ── Log session — bypasses modal, navigates with protocol in state ──
+
+  const handleLogSession = () => {
+    navigate("/sessions/log", { state: { protocol } });
   };
 
   // ── Loading / error guards ─────────────────────────────────
@@ -172,7 +159,10 @@ export default function ShowProtocolPage() {
     return <div className="p-8 text-gray-500">Protocol not found.</div>;
   }
 
-  const isDraft = protocol.protocolStatus !== "FINALIZED";
+  const isDraft      = protocol.protocolStatus === "DRAFT";
+  const isFinalized  = protocol.protocolStatus === "FINALIZED";
+  const isArchived   = protocol.protocolStatus === "ARCHIVED";
+  const showBadge    = isDraft || isArchived;
 
   return (
     <div className="max-w-[1000px] mx-auto px-8 py-10">
@@ -243,29 +233,65 @@ export default function ShowProtocolPage() {
           )}
 
           <p className="text-gray-500 mt-1">
-            Version {protocol.protocolVersion} • {protocol.auditQuestions?.length ?? 0} Questions
+            {protocol.auditQuestions?.length ?? 0} Questions
           </p>
         </div>
 
+        {/* ── Right-side controls ────────────────────────────── */}
         <div className="flex flex-col items-end gap-3 ml-4">
-          <span
-            className={`px-3 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider border ${
-              isDraft
-                ? "bg-amber-100 text-amber-700 border-amber-200"
-                : "bg-green-100 text-green-700 border-green-200"
-            }`}
-          >
-            {protocol.protocolStatus || "DRAFT"}
-          </span>
 
-          {isDraft && (
-            <button
-              onClick={handleFinalize}
-              className="text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded shadow-sm transition-all whitespace-nowrap"
+          {/* Status badge — only for DRAFT and ARCHIVED */}
+          {showBadge && (
+            <span
+              className={`px-3 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider border ${
+                isDraft
+                  ? "bg-amber-100 text-amber-700 border-amber-200"
+                  : "bg-gray-100 text-gray-500 border-gray-200"
+              }`}
             >
-              Finalize Protocol
-            </button>
+              {protocol.protocolStatus}
+            </span>
           )}
+
+          {/* Action buttons */}
+          <div className="flex items-center gap-2">
+            {/* View Results — always available */}
+            <button
+              onClick={() => navigate(`/results?protocolId=${id}`)}
+              className="flex items-center gap-1.5 text-xs font-bold text-text-sec border border-border-sec hover:border-border-pri hover:bg-bg-secondary px-3.5 py-2 rounded-md transition-all"
+            >
+              <svg width="13" height="13" viewBox="0 0 15 15" fill="none" stroke="currentColor" strokeWidth="1.4">
+                <rect x="1.5" y="8"    width="2.5" height="5.5"  rx="0.5"/>
+                <rect x="6"   y="5"    width="2.5" height="8.5"  rx="0.5"/>
+                <rect x="10.5" y="2"   width="2.5" height="11.5" rx="0.5"/>
+              </svg>
+              View Results
+            </button>
+
+            {/* Log Session — FINALIZED only */}
+            {isFinalized && (
+              <button
+                onClick={handleLogSession}
+                className="flex items-center gap-1.5 text-xs font-bold text-white bg-lsg-navy hover:bg-lsg-midnight px-3.5 py-2 rounded-md transition-all"
+              >
+                <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                  <circle cx="6" cy="6" r="4.5" stroke="white" strokeWidth="1.5"/>
+                  <path d="M6 3.5v2.5l1.5 1.5" stroke="white" strokeWidth="1.5" strokeLinecap="round"/>
+                </svg>
+                Log Session
+              </button>
+            )}
+
+            {/* Finalize — DRAFT only */}
+            {isDraft && (
+              <button
+                onClick={handleFinalize}
+                className="text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded shadow-sm transition-all whitespace-nowrap"
+              >
+                Finalize Protocol
+              </button>
+            )}
+          </div>
         </div>
       </header>
 
@@ -331,7 +357,6 @@ export default function ShowProtocolPage() {
                   )}
                 </div>
 
-                {/* Subattributes */}
                 {q.subattributes && q.subattributes.length > 0 && (
                   <div className="mt-4 pt-4 border-t border-gray-50 space-y-4">
                     {q.subattributes.map((sub) => (
@@ -359,7 +384,7 @@ export default function ShowProtocolPage() {
         </div>
       )}
 
-      {/* ── Edit question modal ──────────────────────────────── */}
+      {/* ── Modals ──────────────────────────────────────────── */}
       <QuestionEditModal
         isOpen={!!editingQuestion}
         question={editingQuestion}
@@ -368,12 +393,6 @@ export default function ShowProtocolPage() {
         saveError={editSaveError}
       />
 
-      {/* ── Add question modal ───────────────────────────────── */}
-      {/*
-        Pass a fresh blank question each render so useQuestionForm's useEffect
-        picks up the template on every open. The key forces the modal to remount
-        when it opens, which resets form state cleanly.
-      */}
       <QuestionEditModal
         isOpen={isAddingQuestion}
         question={isAddingQuestion ? blankQuestion(id) : null}

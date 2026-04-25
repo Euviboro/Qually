@@ -32,10 +32,7 @@ const NAV_ITEMS = [
     to: "/protocols/new", label: "New Protocol", end: false, qaOnly: true, opsOnly: false,
     icon: (p) => <svg {...p} viewBox="0 0 15 15" fill="none"><rect x="2" y="1" width="11" height="13" rx="1.5" stroke="currentColor" strokeWidth="1.4"/><path d="M5 5h5M5 8h5M5 11h3" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/></svg>,
   },
-  {
-    to: "/sessions/log", label: "Log Session", end: false, qaOnly: true, opsOnly: false,
-    icon: (p) => <svg {...p} viewBox="0 0 15 15" fill="none"><circle cx="7.5" cy="7.5" r="6" stroke="currentColor" strokeWidth="1.4"/><path d="M7.5 4.5v3l2 2" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/></svg>,
-  },
+ 
   {
     to: "/results", label: "Results", end: false, qaOnly: false, opsOnly: false,
     icon: (p) => <svg {...p} viewBox="0 0 15 15" fill="none"><rect x="1" y="3" width="13" height="10" rx="1.5" stroke="currentColor" strokeWidth="1.4"/><path d="M1 6h13M5 6v7M10 6v7" stroke="currentColor" strokeWidth="1.2"/></svg>,
