@@ -5,11 +5,12 @@ import { api } from "./apiClient";
 /**
  * @typedef {Object} AuditSessionRequestDTO
  * @property {number}                  protocolId
- * @property {string}                  interactionId    - External reference (e.g. call ID).
- * @property {number}                  auditorUserId    - Integer PK of the conducting user.
- * @property {string}                  memberAudited    - Name/ID of the person being audited.
+ * @property {string}                  interactionId
+ * @property {number}                  auditorUserId
+ * @property {number}                  memberAuditedUserId
+ * @property {number}                  lobId
  * @property {string}                  [comments]
- * @property {"DRAFT"|"COMPLETED"}     [auditStatus]    - Defaults to DRAFT on the server.
+ * @property {"DRAFT"|"COMPLETED"}     [auditStatus]
  */
 
 /**
@@ -17,23 +18,40 @@ import { api } from "./apiClient";
  * @property {number}                        sessionId
  * @property {"DRAFT"|"COMPLETED"|"DISPUTED"|"RESOLVED"} auditStatus
  * @property {string}                        interactionId
- * @property {string}                        memberAudited
+ * @property {string}                        memberAuditedName
  * @property {string}                        [comments]
  * @property {number}                        protocolId
  * @property {string}                        protocolName
  * @property {number}                        protocolVersion
- * @property {"STANDARD"|"ACCOUNTABILITY"}   auditLogicType - From the protocol.
+ * @property {"STANDARD"|"ACCOUNTABILITY"}   auditLogicType
+ * @property {number}                        clientId
+ * @property {string}                        clientName
  * @property {number|null}                   auditorUserId
  * @property {string|null}                   auditorName
+ * @property {number|null}                   memberAuditedUserId
+ * @property {number|null}                   lobId
+ * @property {string|null}                   lobName
  * @property {"UNCHANGED"|"MODIFIED"|null}   resolutionOutcome
  * @property {string}                        [startedAt]
  * @property {string}                        [submittedAt]
  */
 
 /**
+ * A single subattribute option selection within a bulk response item.
+ *
+ * @typedef {Object} SubattributeAnswerItemDTO
+ * @property {number} subattributeOptionId - FK to subattribute_options.
+ */
+
+/**
+ * A single question answer within a bulk response submission.
+ *
  * @typedef {Object} AuditResponseItemDTO
- * @property {number} questionId
- * @property {string} questionAnswer - `"YES"` or `"NO"`.
+ * @property {number}   questionId
+ * @property {string}   questionAnswer      - "YES", "NO", or "N/A".
+ * @property {SubattributeAnswerItemDTO[]} [subattributeAnswers]
+ *   Option selections for sub-criteria. Only sent when questionAnswer is "NO"
+ *   and the auditor made at least one selection. Omitted otherwise.
  */
 
 /**
@@ -43,11 +61,14 @@ import { api } from "./apiClient";
  */
 
 /**
- * Fetches all sessions, optionally filtered by auditor user ID or status.
- *
- * @param {{ auditorUserId?: number, auditStatus?: string }} [params]
- * @returns {Promise<AuditSessionResponseDTO[]>}
+ * @typedef {Object} AuditResponseDTO
+ * @property {number} auditResponseId
+ * @property {number} sessionId
+ * @property {number} questionId
+ * @property {string} questionText
+ * @property {string} questionAnswer
  */
+
 export const getSessions = ({ auditorUserId, auditStatus } = {}) => {
   const params = new URLSearchParams();
   if (auditorUserId != null) params.set("auditorUserId", auditorUserId);
@@ -56,18 +77,12 @@ export const getSessions = ({ auditorUserId, auditStatus } = {}) => {
   return api.get(qs ? `/sessions?${qs}` : "/sessions");
 };
 
-/**
- * Fetches a single session by ID.
- *
- * @param {number|string} sessionId
- * @returns {Promise<AuditSessionResponseDTO>}
- */
 export const getSessionById = (sessionId) =>
   api.get(`/sessions/${sessionId}`);
 
 /**
  * Creates a new audit session.
- * Omit `auditStatus` to default to DRAFT, or pass `"COMPLETED"` to submit immediately.
+ * Omit {@code auditStatus} to default to DRAFT.
  *
  * @param {AuditSessionRequestDTO} sessionData
  * @returns {Promise<AuditSessionResponseDTO>}
@@ -75,21 +90,15 @@ export const getSessionById = (sessionId) =>
 export const createSession = (sessionData) =>
   api.post("/sessions", sessionData);
 
-/**
- * Partially updates an existing session (status, comments).
- *
- * @param {number|string} sessionId
- * @param {{ auditStatus?: string, comments?: string }} data
- * @returns {Promise<AuditSessionResponseDTO>}
- */
 export const updateSession = (sessionId, data) =>
   api.put(`/sessions/${sessionId}`, data);
 
 /**
- * Submits bulk YES/NO answers for a session.
+ * Submits bulk YES/NO/N/A answers for a session, including any subattribute
+ * option selections made for NO answers.
  *
  * @param {BulkAuditAnswerRequestDTO} dto
- * @returns {Promise<import('./questions').AuditResponseDTO[]>}
+ * @returns {Promise<AuditResponseDTO[]>}
  */
 export const submitBulkResponses = (dto) =>
   api.post("/responses/bulk", dto);

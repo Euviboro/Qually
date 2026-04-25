@@ -2,69 +2,59 @@ package com.qually.qually.services;
 
 import com.qually.qually.dto.request.AuditSessionRequestDTO;
 import com.qually.qually.dto.request.AuditSessionUpdateRequestDTO;
-import com.qually.qually.dto.response.AuditSessionResponseDTO;
+import com.qually.qually.dto.response.*;
+import com.qually.qually.mappers.AuditDisputeMapper;
 import com.qually.qually.mappers.AuditSessionMapper;
-import com.qually.qually.models.AuditProtocol;
-import com.qually.qually.models.AuditSession;
-import com.qually.qually.models.User;
+import com.qually.qually.mappers.SessionScoreMapper;
+import com.qually.qually.models.*;
 import com.qually.qually.models.enums.AuditStatus;
-import com.qually.qually.repositories.AuditProtocolRepository;
-import com.qually.qually.repositories.AuditSessionRepository;
-import com.qually.qually.repositories.UserRepository;
+import com.qually.qually.models.enums.Department;
+import com.qually.qually.models.enums.ResolutionOutcome;
+import com.qually.qually.repositories.*;
 import jakarta.persistence.EntityNotFoundException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
 
-/**
- * Service for CRUD operations on {@link AuditSession} entities.
- *
- * <p><strong>Architecture alignment:</strong> the inline {@code toDTO} method
- * has been extracted into {@link AuditSessionMapper}, following the same pattern
- * as {@link AuditProtocolService} / {@link AuditProtocolMapper} and
- * {@link AuditQuestionService} / {@link AuditQuestionMapper}. The service is
- * now purely responsible for orchestrating repository calls and passing resolved
- * entities to the mapper.</p>
- *
- * <p><strong>Schema changes:</strong></p>
- * <ul>
- *   <li>Auditor is looked up by {@code auditorUserId} (Integer) via
- *       {@code userRepository.findById}, not by email.</li>
- *   <li>{@code getAllSessions} filters by {@code auditorUserId} (Integer)
- *       instead of {@code auditorEmail}.</li>
- * </ul>
- */
 @Service
 public class AuditSessionService {
+
+    private static final Logger log = LoggerFactory.getLogger(AuditSessionService.class);
 
     private final AuditSessionRepository auditSessionRepository;
     private final AuditProtocolRepository auditProtocolRepository;
     private final UserRepository userRepository;
+    private final LobRepository lobRepository;
+    private final AuditResponseRepository auditResponseRepository;
+    private final SessionScoreRepository sessionScoreRepository;
     private final AuditSessionMapper auditSessionMapper;
+    private final AuditDisputeMapper auditDisputeMapper;
+    private final SessionScoreMapper sessionScoreMapper;
 
     public AuditSessionService(AuditSessionRepository auditSessionRepository,
                                AuditProtocolRepository auditProtocolRepository,
                                UserRepository userRepository,
-                               AuditSessionMapper auditSessionMapper) {
+                               LobRepository lobRepository,
+                               AuditResponseRepository auditResponseRepository,
+                               SessionScoreRepository sessionScoreRepository,
+                               AuditSessionMapper auditSessionMapper,
+                               AuditDisputeMapper auditDisputeMapper,
+                               SessionScoreMapper sessionScoreMapper) {
         this.auditSessionRepository = auditSessionRepository;
         this.auditProtocolRepository = auditProtocolRepository;
         this.userRepository = userRepository;
+        this.lobRepository = lobRepository;
+        this.auditResponseRepository = auditResponseRepository;
+        this.sessionScoreRepository = sessionScoreRepository;
         this.auditSessionMapper = auditSessionMapper;
+        this.auditDisputeMapper = auditDisputeMapper;
+        this.sessionScoreMapper = sessionScoreMapper;
     }
 
-    /**
-     * Creates a new audit session.
-     *
-     * <p>Status defaults to {@link AuditStatus#DRAFT} when not provided.
-     * {@code submittedAt} is auto-set when status is {@code COMPLETED} —
-     * this logic lives in {@link AuditSessionMapper#toEntity}.</p>
-     *
-     * @param dto Session creation payload.
-     * @return The persisted session DTO.
-     * @throws EntityNotFoundException if the protocol or auditor does not exist.
-     */
     @Transactional
     public AuditSessionResponseDTO createSession(AuditSessionRequestDTO dto) {
         AuditProtocol protocol = auditProtocolRepository.findById(dto.getProtocolId())
@@ -72,21 +62,43 @@ public class AuditSessionService {
                         "Protocol with ID %d not found".formatted(dto.getProtocolId())));
         User auditor = userRepository.findById(dto.getAuditorUserId())
                 .orElseThrow(() -> new EntityNotFoundException(
-                        "User with ID %d not found".formatted(dto.getAuditorUserId())));
+                        "Auditor with ID %d not found".formatted(dto.getAuditorUserId())));
+        User memberAudited = userRepository.findById(dto.getMemberAuditedUserId())
+                .orElseThrow(() -> new EntityNotFoundException(
+                        "Member audited with ID %d not found"
+                        .formatted(dto.getMemberAuditedUserId())));
 
-        AuditSession session = auditSessionMapper.toEntity(dto, protocol, auditor);
-        return auditSessionMapper.toDTO(auditSessionRepository.save(session));
+        if (dto.getAuditorUserId().equals(dto.getMemberAuditedUserId())) {
+            throw new IllegalArgumentException(
+                    "The auditor and the member audited cannot be the same person.");
+        }
+
+        Lob lob = lobRepository.findById(dto.getLobId())
+                .orElseThrow(() -> new EntityNotFoundException(
+                        "LOB with ID %d not found".formatted(dto.getLobId())));
+
+        if (!lob.getClient().getClientId().equals(protocol.getClient().getClientId())) {
+            throw new IllegalArgumentException(
+                    "The selected LOB does not belong to this protocol's client.");
+        }
+
+        AuditSession session = auditSessionMapper.toEntity(
+                dto, protocol, auditor, memberAudited, lob);
+        AuditSession saved = auditSessionRepository.save(session);
+
+        log.info("Session {} created — protocol '{}', auditor {}, member {}, status {}",
+                saved.getSessionId(), protocol.getProtocolName(),
+                auditor.getUserId(), memberAudited.getUserId(), saved.getAuditStatus());
+
+        return auditSessionMapper.toDTO(saved);
     }
 
-    /**
-     * Returns all sessions, optionally filtered by auditor user ID or status.
-     *
-     * @param auditorUserId When non-null, filters to sessions by this auditor.
-     * @param auditStatus   When non-null, filters to sessions with this status string.
-     */
     @Transactional(readOnly = true)
-    public List<AuditSessionResponseDTO> getAllSessions(Integer auditorUserId, String auditStatus) {
+    public List<AuditSessionResponseDTO> getAllSessions(Integer auditorUserId,
+                                                        String auditStatus,
+                                                        Integer currentUserId) {
         List<AuditSession> sessions;
+
         if (auditorUserId != null) {
             sessions = auditSessionRepository.findByAuditor_UserId(auditorUserId);
         } else if (auditStatus != null && !auditStatus.isBlank()) {
@@ -95,14 +107,24 @@ public class AuditSessionService {
         } else {
             sessions = auditSessionRepository.findAll();
         }
+
+        if (currentUserId != null) {
+            User currentUser = userRepository.findById(currentUserId).orElse(null);
+            if (currentUser != null && Department.OPERATIONS.equals(
+                    currentUser.getRole() != null
+                            ? currentUser.getRole().getDepartment() : null)) {
+                List<Integer> clientIds = currentUser.getClients().stream()
+                        .map(Client::getClientId).toList();
+                sessions = sessions.stream()
+                        .filter(s -> clientIds.contains(
+                                s.getAuditProtocol().getClient().getClientId()))
+                        .toList();
+            }
+        }
+
         return sessions.stream().map(auditSessionMapper::toDTO).toList();
     }
 
-    /**
-     * Returns a single session by its ID.
-     *
-     * @throws EntityNotFoundException if no session with this ID exists.
-     */
     @Transactional(readOnly = true)
     public AuditSessionResponseDTO getSessionById(Long id) {
         return auditSessionRepository.findById(id)
@@ -111,30 +133,75 @@ public class AuditSessionService {
                         "Audit session with ID %d not found".formatted(id)));
     }
 
-    /**
-     * Partially updates an existing session (status, comments, submittedAt).
-     *
-     * <p>Transitioning to {@link AuditStatus#COMPLETED} auto-sets
-     * {@code submittedAt} to now if not already set.</p>
-     *
-     * @throws EntityNotFoundException if no session with this ID exists.
-     */
+    @Transactional(readOnly = true)
+    public SessionResultsResponseDTO getSessionResults(Long sessionId) {
+        AuditSession session = auditSessionRepository.findById(sessionId)
+                .orElseThrow(() -> new EntityNotFoundException(
+                        "Audit session with ID %d not found".formatted(sessionId)));
+
+        List<SessionScoreResponseDTO> scores = sessionScoreRepository
+                .findByAuditSession_SessionId(sessionId)
+                .stream().map(sessionScoreMapper::toDTO).toList();
+
+        List<AuditResponseResultDTO> responses = auditResponseRepository
+                .findByAuditSession_SessionId(sessionId)
+                .stream().map(this::toResponseResultDTO).toList();
+
+        return SessionResultsResponseDTO.builder()
+                .session(auditSessionMapper.toDTO(session))
+                .scores(scores)
+                .responses(responses)
+                .build();
+    }
+
     @Transactional
     public AuditSessionResponseDTO updateSession(Long id, AuditSessionUpdateRequestDTO dto) {
         AuditSession session = auditSessionRepository.findById(id)
                 .orElseThrow(() -> new EntityNotFoundException(
                         "Audit session with ID %d not found".formatted(id)));
 
+        AuditStatus previousStatus = session.getAuditStatus();
+
         if (dto.getAuditStatus() != null) {
             session.setAuditStatus(dto.getAuditStatus());
-            if (AuditStatus.COMPLETED.equals(dto.getAuditStatus()) && session.getSubmittedAt() == null) {
-                session.setSubmittedAt(
-                        dto.getSubmittedAt() != null ? dto.getSubmittedAt() : LocalDateTime.now());
+            if (AuditStatus.COMPLETED.equals(dto.getAuditStatus())
+                    && session.getSubmittedAt() == null) {
+                session.setSubmittedAt(dto.getSubmittedAt() != null
+                        ? dto.getSubmittedAt() : LocalDateTime.now());
             }
         }
         if (dto.getComments() != null)    session.setComments(dto.getComments());
         if (dto.getSubmittedAt() != null) session.setSubmittedAt(dto.getSubmittedAt());
 
-        return auditSessionMapper.toDTO(auditSessionRepository.save(session));
+        AuditSession saved = auditSessionRepository.save(session);
+
+        if (dto.getAuditStatus() != null && !dto.getAuditStatus().equals(previousStatus)) {
+            log.info("Session {} status changed: {} → {}",
+                    id, previousStatus, dto.getAuditStatus());
+        }
+
+        return auditSessionMapper.toDTO(saved);
+    }
+
+    // ── Helpers ───────────────────────────────────────────────
+
+    private AuditResponseResultDTO toResponseResultDTO(AuditResponse response) {
+        String effectiveAnswer = response.getQuestionAnswer();
+        if (response.getDispute() != null
+                && ResolutionOutcome.MODIFIED.equals(
+                        response.getDispute().getResolutionOutcome())
+                && response.getDispute().getNewAnswer() != null) {
+            effectiveAnswer = response.getDispute().getNewAnswer();
+        }
+        return AuditResponseResultDTO.builder()
+                .responseId(response.getAuditResponseId())
+                .questionId(response.getAuditQuestion().getQuestionId())
+                .questionText(response.getAuditQuestion().getQuestionText())
+                .category(response.getAuditQuestion().getCategory().name())
+                .originalAnswer(response.getQuestionAnswer())
+                .effectiveAnswer(effectiveAnswer)
+                .responseStatus(response.getResponseStatus().name())
+                .dispute(auditDisputeMapper.toDTO(response.getDispute()))
+                .build();
     }
 }

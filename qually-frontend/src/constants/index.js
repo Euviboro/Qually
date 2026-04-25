@@ -1,72 +1,105 @@
-/** @module constants */
-
-/** Base URL for all API requests, injected by Vite from `.env`. */
-export const API_BASE = import.meta.env.VITE_API_BASE;
-
 /**
- * Display metadata for each COPC category enum value.
- * Keys match the backend `CopcCategory` enum exactly.
+ * @fileoverview Shared application constants.
  *
- * @type {Record<string, { label: string, bgVar: string, textVar: string, dotVar: string }>}
+ * Import individual exports rather than the whole module to keep
+ * tree-shaking effective.
+ */
+
+// ── Answer values ─────────────────────────────────────────────
+/**
+ * Valid answer values for audit questions.
+ * Mirrors {@code AuditAnswerType} on the backend.
  *
  * @example
- * const meta = COPC_CATEGORY_META["CUSTOMER"];
- * // meta.label → "Customer Critical"
- * // meta.bgVar  → "--color-copc-customer-bg"  (CSS variable name)
+ * import { ANSWERS } from '../../constants';
+ * if (answer === ANSWERS.NO) { ... }
  */
-export const COPC_CATEGORY_META = {
-  CUSTOMER:   { label: "Customer Critical",   bgVar: "--color-copc-customer-bg",    textVar: "--color-copc-customer-text",    dotVar: "--color-copc-customer-dot"   },
-  BUSINESS:   { label: "Business Critical",   bgVar: "--color-copc-business-bg",    textVar: "--color-copc-business-text",    dotVar: "--color-copc-business-dot"   },
-  COMPLIANCE: { label: "Compliance Critical", bgVar: "--color-copc-compliance-bg",  textVar: "--color-copc-compliance-text",  dotVar: "--color-copc-compliance-dot" },
+export const ANSWERS = {
+  YES: "YES",
+  NO:  "NO",
+  NA:  "N/A",
 };
 
+// ── Client card accent colours ────────────────────────────────
 /**
- * Display metadata for each `ProtocolStatus` enum value.
- * Keys match the backend `ProtocolStatus` enum exactly.
- *
- * @type {Record<string, { label: string, bgVar: string, textVar: string }>}
- */
-export const PROTOCOL_STATUS_META = {
-  DRAFT:     { label: "Draft",     bgVar: "--color-warning-bg",          textVar: "--color-warning-text"       },
-  FINALIZED: { label: "Finalized", bgVar: "--color-success-bg",          textVar: "--color-success-text"       },
-  ARCHIVED:  { label: "Archived",  bgVar: "--color-background-tertiary", textVar: "--color-text-tertiary"      },
-};
-
-/**
- * Display metadata for each `AuditStatus` enum value.
- * Keys match the backend `AuditStatus` enum exactly:
- * `DRAFT`, `COMPLETED`, `DISPUTED`, `RESOLVED`.
- *
- * @type {Record<string, { label: string, bg: string, text: string }>}
- */
-export const AUDIT_STATUS_META = {
-  DRAFT:     { label: "Draft",     bg: "var(--color-warning-bg)",            text: "var(--color-warning-text)"           },
-  COMPLETED: { label: "Completed", bg: "var(--color-success-bg)",            text: "var(--color-success-text)"           },
-  DISPUTED:  { label: "Disputed",  bg: "var(--color-error-bg)",              text: "var(--color-error-text)"             },
-  RESOLVED:  { label: "Resolved",  bg: "var(--color-background-tertiary)",   text: "var(--color-text-secondary)"         },
-};
-
-/**
- * Display metadata for each `AuditLogicType` enum value.
- *
- * @type {Record<string, { label: string, description: string }>}
- */
-export const AUDIT_LOGIC_TYPE_META = {
-  STANDARD:       { label: "Standard",       description: "Any NO marks the category as 0" },
-  ACCOUNTABILITY: { label: "Accountability", description: "Only company-accountable NOs affect the score" },
-};
-
-/**
- * Rotating palette used to visually distinguish client cards on the Dashboard.
- * All values are CSS variable references so they respect the design token system.
+ * Cycling palette for client card avatars.
+ * Each entry has `bg` (surface), `text` (foreground), `dot` (indicator).
+ * Values are plain hex / CSS colour strings applied as inline styles.
  *
  * @type {{ bg: string, text: string, dot: string }[]}
  */
 export const CLIENT_ACCENT_COLORS = [
-  { bg: "var(--color-copc-customer-bg)",    text: "var(--color-copc-customer-text)",    dot: "var(--color-copc-customer-dot)"    },
-  { bg: "var(--color-background-accent)",   text: "var(--lsg-trust-navy-mid)",          dot: "var(--lsg-lean-blue-dark)"         },
-  { bg: "var(--color-copc-business-bg)",    text: "var(--color-copc-business-text)",    dot: "var(--color-copc-business-dot)"    },
-  { bg: "var(--color-copc-compliance-bg)",  text: "var(--color-copc-compliance-text)",  dot: "var(--color-copc-compliance-dot)"  },
-  { bg: "var(--color-background-tertiary)", text: "var(--color-text-secondary)",        dot: "var(--color-text-tertiary)"        },
-  { bg: "var(--color-background-accent)",   text: "var(--lsg-midnight)",                dot: "var(--lsg-lean-blue)"              },
+  { bg: "#E6F4FF", text: "#003D84", dot: "#0096FF" }, // LSG blue
+  { bg: "#FFF0E6", text: "#7A3200", dot: "#FF8021" }, // LSG orange
+  { bg: "#E1F5EE", text: "#085041", dot: "#1D9E75" }, // success green
+  { bg: "#EDE9FF", text: "#3B0090", dot: "#7C3AED" }, // violet
+  { bg: "#E6F0FF", text: "#002F65", dot: "#003D84" }, // deep navy
+  { bg: "#FFF8E1", text: "#7A5200", dot: "#F59E0B" }, // amber
 ];
+
+// ── Protocol status display metadata ─────────────────────────
+/**
+ * Display metadata for {@code AuditProtocol.protocolStatus} values.
+ * {@code bgVar} and {@code textVar} are CSS custom-property names
+ * (without the wrapping `var()`) used by components as inline styles.
+ */
+export const PROTOCOL_STATUS_META = {
+  DRAFT: {
+    label:   "Draft",
+    bgVar:   "--color-bg-tertiary",
+    textVar: "--color-text-ter",
+  },
+  FINALIZED: {
+    label:   "Finalized",
+    bgVar:   "--color-bg-accent",
+    textVar: "--color-lsg-navy",
+  },
+  ARCHIVED: {
+    label:   "Archived",
+    bgVar:   "--color-bg-secondary",
+    textVar: "--color-text-ter",
+  },
+};
+
+// ── COPC category display metadata ───────────────────────────
+/**
+ * Display metadata for COPC audit question categories.
+ * Variable names reference the `--color-copc-*` tokens defined in index.css.
+ */
+export const COPC_CATEGORY_META = {
+  CUSTOMER: {
+    label:   "Customer Critical",
+    bgVar:   "--color-copc-customer-bg",
+    textVar: "--color-copc-customer-text",
+  },
+  BUSINESS: {
+    label:   "Business Critical",
+    bgVar:   "--color-copc-business-bg",
+    textVar: "--color-copc-business-text",
+  },
+  COMPLIANCE: {
+    label:   "Compliance Critical",
+    bgVar:   "--color-copc-compliance-bg",
+    textVar: "--color-copc-compliance-text",
+  },
+};
+
+// ── Audit session status display metadata ────────────────────
+export const AUDIT_STATUS_META = {
+  DRAFT:     { label: "Draft",     bg: "var(--color-bg-tertiary)",     text: "var(--color-text-ter)"      },
+  COMPLETED: { label: "Completed", bg: "var(--color-success-surface)", text: "var(--color-success-on)"    },
+  DISPUTED:  { label: "Disputed",  bg: "var(--color-error-surface)",   text: "var(--color-error-on)"      },
+  RESOLVED:  { label: "Resolved",  bg: "var(--color-bg-accent)",       text: "var(--color-lsg-blue-dark)" },
+};
+
+// ── Audit logic type display metadata ────────────────────────
+export const AUDIT_LOGIC_TYPE_META = {
+  STANDARD: {
+    label:       "Standard",
+    description: "Each NO answer reduces the score proportionally.",
+  },
+  ACCOUNTABILITY: {
+    label:       "Accountability",
+    description: "Any single NO answer on an accountability question scores 0.",
+  },
+};

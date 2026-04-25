@@ -3,19 +3,15 @@ package com.qually.qually.controllers;
 import com.qually.qually.dto.request.AuditSessionRequestDTO;
 import com.qually.qually.dto.request.AuditSessionUpdateRequestDTO;
 import com.qually.qually.dto.response.AuditSessionResponseDTO;
+import com.qually.qually.dto.response.SessionResultsResponseDTO;
 import com.qually.qually.services.AuditSessionService;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
-/**
- * REST controller for {@link com.qually.qually.models.AuditSession} resources.
- *
- * <p>{@code auditorEmail} query param replaced by {@code auditorUserId}
- * (Integer) to match the new FK structure on {@code audit_sessions}.</p>
- */
 @RestController
 @RequestMapping("/api/sessions")
 public class AuditSessionController {
@@ -32,11 +28,17 @@ public class AuditSessionController {
         return ResponseEntity.ok(auditSessionService.createSession(dto));
     }
 
+    /**
+     * Returns sessions filtered by auditor, status, and the current user's
+     * client access (OPERATIONS users only see their assigned clients).
+     */
     @GetMapping
     public ResponseEntity<List<AuditSessionResponseDTO>> getAllSessions(
             @RequestParam(required = false) Integer auditorUserId,
-            @RequestParam(required = false) String auditStatus) {
-        return ResponseEntity.ok(auditSessionService.getAllSessions(auditorUserId, auditStatus));
+            @RequestParam(required = false) String auditStatus,
+            HttpServletRequest req) {
+        return ResponseEntity.ok(auditSessionService.getAllSessions(
+                auditorUserId, auditStatus, currentUserIdOrNull(req)));
     }
 
     @GetMapping("/{id}")
@@ -44,10 +46,24 @@ public class AuditSessionController {
         return ResponseEntity.ok(auditSessionService.getSessionById(id));
     }
 
+    /** Full session results: metadata + scores + responses with dispute info. */
+    @GetMapping("/{id}/results")
+    public ResponseEntity<SessionResultsResponseDTO> getSessionResults(@PathVariable Long id) {
+        return ResponseEntity.ok(auditSessionService.getSessionResults(id));
+    }
+
     @PutMapping("/{id}")
     public ResponseEntity<AuditSessionResponseDTO> updateSession(
             @PathVariable Long id,
             @RequestBody AuditSessionUpdateRequestDTO dto) {
         return ResponseEntity.ok(auditSessionService.updateSession(id, dto));
+    }
+
+    // ── Helpers ───────────────────────────────────────────────
+
+    private Integer currentUserIdOrNull(HttpServletRequest req) {
+        String header = req.getHeader("X-User-Id");
+        if (header == null || header.isBlank()) return null;
+        try { return Integer.parseInt(header); } catch (NumberFormatException e) { return null; }
     }
 }

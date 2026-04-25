@@ -3,18 +3,9 @@ package com.qually.qually.models;
 import jakarta.persistence.*;
 import lombok.*;
 
-/**
- * Represents an application user.
- *
- * <p><strong>Schema alignment:</strong></p>
- * <ul>
- *   <li>PK is now {@code user_id} (auto-increment int). Previously {@code user_email}
- *       was the PK; it is now a plain unique column.</li>
- *   <li>The inline {@code UserRole} enum column has been replaced by a {@link Role}
- *       FK ({@code role_id}), matching the separate {@code roles} table.</li>
- *   <li>{@code manager_id} self-referencing FK added (nullable).</li>
- * </ul>
- */
+import java.util.ArrayList;
+import java.util.List;
+
 @Entity
 @Table(name = "users")
 @Getter
@@ -35,19 +26,29 @@ public class User {
     @Column(name = "full_name", nullable = false, length = 100)
     private String fullName;
 
-    /**
-     * The user's role, defined in the {@code roles} table.
-     * Nullable — a user may not have been assigned a role yet.
-     */
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "role_id")
     private Role role;
 
-    /**
-     * Optional reference to this user's direct manager.
-     * Nullable — top-level users have no manager.
-     */
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "manager_id")
     private User manager;
+
+    /**
+     * Whether this user is active. Inactive users are hidden from all
+     * dropdowns and cannot log in. Historical records (sessions, disputes)
+     * referencing this user are preserved.
+     */
+    @Column(name = "is_active", nullable = false)
+    @Builder.Default
+    private Boolean isActive = true;
+
+    @ManyToMany(fetch = FetchType.LAZY)
+    @JoinTable(
+        name = "user_clients",
+        joinColumns = @JoinColumn(name = "user_id"),
+        inverseJoinColumns = @JoinColumn(name = "client_id")
+    )
+    @Builder.Default
+    private List<Client> clients = new ArrayList<>();
 }

@@ -4,57 +4,39 @@ import { api } from "./apiClient";
 
 /**
  * @typedef {Object} UserResponseDTO
- * @property {number}      userId
- * @property {string}      userEmail
- * @property {string}      fullName
- * @property {number|null} roleId
- * @property {string|null} roleName
- * @property {"QA"|"OPERATIONS"|null} department
- * @property {number|null} managerId
- * @property {string|null} managerName
+ * @property {number}  userId
+ * @property {string}  userEmail
+ * @property {string}  fullName
+ * @property {number}  roleId
+ * @property {string}  roleName
+ * @property {"QA"|"OPERATIONS"} department
+ * @property {number}  hierarchyLevel
+ * @property {number}  managerId
+ * @property {string}  managerName
+ * @property {number[]} clientIds
+ * @property {boolean} isActive
  */
 
-/**
- * @typedef {Object} UserRequestDTO
- * @property {string}      userEmail
- * @property {string}      fullName
- * @property {number}      [roleId]
- * @property {number}      [managerId]
- */
+export const getUsers = (params = {}) => {
+  const qs = new URLSearchParams();
+  if (params.roleName)   qs.set("roleName",   params.roleName);
+  if (params.activeOnly) qs.set("activeOnly", "true");
+  const query = qs.toString();
+  return api.get(query ? `/users?${query}` : "/users");
+};
 
 /**
- * Fetches all users, optionally filtered by role name.
+ * Returns active users with auditable roles for a specific client.
+ * Used to populate the Member Audited dropdown.
  *
- * @param {string} [roleName] - e.g. `"QA_SPECIALIST"`
+ * @param {number} clientId
  * @returns {Promise<UserResponseDTO[]>}
  */
-export const getUsers = (roleName) =>
-  api.get(roleName ? `/users?roleName=${encodeURIComponent(roleName)}` : "/users");
+export const getAuditableUsers = (clientId) =>
+  api.get(`/users?auditable=true&clientId=${clientId}`);
 
-/**
- * Fetches a single user by their integer ID.
- *
- * @param {number} id
- * @returns {Promise<UserResponseDTO>}
- */
-export const getUserById = (id) =>
-  api.get(`/users/${id}`);
-
-/**
- * Creates a new user.
- *
- * @param {UserRequestDTO} dto
- * @returns {Promise<UserResponseDTO>}
- */
-export const createUser = (dto) =>
-  api.post("/users", dto);
-
-/**
- * Updates an existing user's mutable fields.
- *
- * @param {number} id
- * @param {{ fullName?: string, roleId?: number, managerId?: number }} dto
- * @returns {Promise<UserResponseDTO>}
- */
-export const updateUser = (id, dto) =>
-  api.put(`/users/${id}`, dto);
+export const getUserById    = (id)      => api.get(`/users/${id}`);
+export const createUser     = (dto)     => api.post("/users", dto);
+export const updateUser     = (id, dto) => api.put(`/users/${id}`, dto);
+export const deactivateUser = (id)      => api.patch(`/users/${id}/deactivate`);
+export const reactivateUser = (id)      => api.patch(`/users/${id}/reactivate`);

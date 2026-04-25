@@ -6,22 +6,6 @@ import jakarta.validation.constraints.NotNull;
 import lombok.Getter;
 import lombok.Setter;
 
-/**
- * Request payload for creating a new audit session.
- *
- * <p><strong>Schema alignment changes:</strong></p>
- * <ul>
- *   <li>{@code auditorEmail} → {@code auditorUserId} (Integer): the auditor FK
- *       now references {@code users.user_id}, not {@code users.user_email}.</li>
- *   <li>{@code memberAudited} added (NOT NULL in DB): the name/ID of the person
- *       being audited.</li>
- *   <li>{@code auditLogicType} removed: it now lives on the protocol, not the
- *       session.</li>
- *   <li>{@code auditStatus} is optional: when omitted the service defaults to
- *       {@link AuditStatus#DRAFT}. Pass {@link AuditStatus#COMPLETED} to
- *       create and submit in one step.</li>
- * </ul>
- */
 @Getter
 @Setter
 public class AuditSessionRequestDTO {
@@ -35,14 +19,22 @@ public class AuditSessionRequestDTO {
     @NotNull(message = "Auditor user ID is required")
     private Integer auditorUserId;
 
-    @NotBlank(message = "Member audited is required")
-    private String memberAudited;
+    /**
+     * FK to {@code users.user_id}. Must be an active user with an auditable
+     * role (Team Member, Supervisor, or Team Leader) and must differ from
+     * {@code auditorUserId}.
+     */
+    @NotNull(message = "Member audited is required")
+    private Integer memberAuditedUserId;
+
+    /**
+     * FK to {@code lobs.lob_id}. Must belong to the protocol's client.
+     */
+    @NotNull(message = "LOB is required")
+    private Integer lobId;
 
     private String comments;
 
-    /**
-     * Defaults to {@link AuditStatus#DRAFT} when null.
-     * Only {@code DRAFT} and {@code COMPLETED} are valid at creation time.
-     */
+    /** Defaults to {@code DRAFT} when null. */
     private AuditStatus auditStatus;
 }

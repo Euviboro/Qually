@@ -9,6 +9,8 @@ import com.qually.qually.models.enums.ProtocolStatus;
 import com.qually.qually.repositories.AuditProtocolRepository;
 import com.qually.qually.repositories.ClientRepository;
 import jakarta.persistence.EntityNotFoundException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -16,6 +18,8 @@ import java.util.List;
 
 @Service
 public class AuditProtocolService {
+
+    private static final Logger log = LoggerFactory.getLogger(AuditProtocolService.class);
 
     private final AuditProtocolRepository auditProtocolRepository;
     private final ClientRepository clientRepository;
@@ -35,14 +39,24 @@ public class AuditProtocolService {
                 .orElseThrow(() -> new EntityNotFoundException(
                         "Client with ID %d not found".formatted(dto.getClientId())));
 
-        auditProtocolRepository.findByProtocolNameAndClient_ClientId(dto.getProtocolName(), dto.getClientId())
+        auditProtocolRepository
+                .findByProtocolNameAndClient_ClientId(dto.getProtocolName(), dto.getClientId())
                 .ifPresent(existing -> {
+                    log.warn("Duplicate protocol name '{}' rejected for client {}",
+                            dto.getProtocolName(), dto.getClientId());
                     throw new IllegalArgumentException(
-                            "A protocol named '%s' already exists for this client".formatted(dto.getProtocolName()));
+                            "A protocol named '%s' already exists for this client"
+                            .formatted(dto.getProtocolName()));
                 });
 
-        return auditProtocolMapper.toDTO(
-                auditProtocolRepository.save(auditProtocolMapper.toEntity(dto, client)));
+        AuditProtocol saved = auditProtocolRepository.save(
+                auditProtocolMapper.toEntity(dto, client));
+
+        log.info("Protocol {} '{}' created for client {} — logicType {}",
+                saved.getProtocolId(), saved.getProtocolName(),
+                client.getClientId(), saved.getAuditLogicType());
+
+        return auditProtocolMapper.toDTO(saved);
     }
 
     @Transactional(readOnly = true)
@@ -61,10 +75,6 @@ public class AuditProtocolService {
                         "Protocol with ID %d not found".formatted(id)));
     }
 
-    /**
-     * Replaces the mutable fields of an existing protocol.
-     * {@code auditLogicType} is also updated when provided.
-     */
     @Transactional
     public AuditProtocolResponseDTO updateProtocol(Integer id, AuditProtocolRequestDTO dto) {
         AuditProtocol protocol = auditProtocolRepository.findById(id)
@@ -74,17 +84,22 @@ public class AuditProtocolService {
                 .orElseThrow(() -> new EntityNotFoundException(
                         "Client with ID %d not found".formatted(dto.getClientId())));
 
-        auditProtocolRepository.findByProtocolNameAndClient_ClientId(dto.getProtocolName(), dto.getClientId())
+        auditProtocolRepository
+                .findByProtocolNameAndClient_ClientId(dto.getProtocolName(), dto.getClientId())
                 .filter(existing -> !existing.getProtocolId().equals(id))
                 .ifPresent(existing -> {
                     throw new IllegalArgumentException(
-                            "A protocol named '%s' already exists for this client".formatted(dto.getProtocolName()));
+                            "A protocol named '%s' already exists for this client"
+                            .formatted(dto.getProtocolName()));
                 });
 
         protocol.setProtocolName(dto.getProtocolName());
         protocol.setProtocolVersion(dto.getProtocolVersion());
         protocol.setClient(client);
         if (dto.getAuditLogicType() != null) protocol.setAuditLogicType(dto.getAuditLogicType());
+
+        log.info("Protocol {} updated — name '{}' version {}",
+                id, dto.getProtocolName(), dto.getProtocolVersion());
 
         return auditProtocolMapper.toDTO(auditProtocolRepository.save(protocol));
     }
@@ -95,6 +110,7 @@ public class AuditProtocolService {
                 .orElseThrow(() -> new EntityNotFoundException(
                         "Protocol with ID %d not found".formatted(id)));
         protocol.setProtocolStatus(ProtocolStatus.FINALIZED);
+        log.info("Protocol {} '{}' finalized", id, protocol.getProtocolName());
         return auditProtocolMapper.toDTO(auditProtocolRepository.save(protocol));
     }
 
@@ -106,7 +122,9 @@ public class AuditProtocolService {
         if (ProtocolStatus.FINALIZED.equals(protocol.getProtocolStatus())) {
             throw new IllegalStateException("Cannot change the name of a finalized protocol.");
         }
+        String oldName = protocol.getProtocolName();
         protocol.setProtocolName(newName);
+        log.info("Protocol {} renamed: '{}' → '{}'", id, oldName, newName);
         return auditProtocolMapper.toDTO(auditProtocolRepository.save(protocol));
     }
 }

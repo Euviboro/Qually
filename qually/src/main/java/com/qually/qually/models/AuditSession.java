@@ -10,17 +10,13 @@ import java.time.LocalDateTime;
 /**
  * Represents a single audit session conducted against a protocol.
  *
- * <p><strong>Schema alignment changes:</strong></p>
+ * <p><strong>Schema changes in this version:</strong></p>
  * <ul>
- *   <li>{@code auditor} FK now joins on {@code auditor_user_id → users.user_id}
- *       (integer PK). Previously used {@code auditor_email → users.user_email}.</li>
- *   <li>{@code memberAudited} added — the name/ID of the person being audited.
- *       {@code NOT NULL} in the DB.</li>
- *   <li>{@code auditLogicType} removed — it belongs on {@link AuditProtocol},
- *       not the session. The {@code audit_sessions} table has no such column.</li>
- *   <li>{@code resolutionOutcome} column name fixed from the erroneous
- *       {@code "resolutionOutcome"} to the correct snake-case
- *       {@code "resolution_outcome"}.</li>
+ *   <li>{@code memberAudited} (VARCHAR) replaced by {@code memberAuditedUser}
+ *       — a FK to {@link User}. The person being audited must be a registered
+ *       user with an auditable role (Team Member, Supervisor, Team Leader).</li>
+ *   <li>{@code lob} added — FK to {@link Lob}. Selected by the auditor on
+ *       the Log Session page, filtered to the protocol's client.</li>
  * </ul>
  */
 @Entity
@@ -44,33 +40,40 @@ public class AuditSession {
     @Column(name = "audit_status", nullable = false, length = 100)
     private AuditStatus auditStatus;
 
-    @Column(name = "comments", columnDefinition = "MEDIUMTEXT")
+    @Column(name = "comments", columnDefinition = "TEXT")
     private String comments;
-
-    /** Name or identifier of the person whose work is being audited. */
-    @Column(name = "member_audited", nullable = false, length = 100)
-    private String memberAudited;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "protocol_id", nullable = false)
     private AuditProtocol auditProtocol;
 
-    /**
-     * User conducting the audit.
-     * Joined on {@code auditor_user_id → users.user_id} (integer PK).
-     */
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "auditor_user_id")
     private User auditor;
 
-    /** Set by the DB {@code DEFAULT current_timestamp()} — not insertable or updatable by JPA. */
+    /**
+     * The user whose work is being audited.
+     * Must have an auditable role (Team Member, Supervisor, or Team Leader).
+     * Cannot be the same user as {@code auditor}.
+     */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "member_audited_user_id")
+    private User memberAuditedUser;
+
+    /**
+     * Line of Business this session belongs to.
+     * Filtered to the protocol's client at selection time.
+     */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "lob_id")
+    private Lob lob;
+
     @Column(name = "started_at", insertable = false, updatable = false)
     private LocalDateTime startedAt;
 
     @Column(name = "submitted_at")
     private LocalDateTime submittedAt;
 
-    /** Column name corrected from {@code resolutionOutcome} to {@code resolution_outcome}. */
     @Enumerated(EnumType.STRING)
     @Column(name = "resolution_outcome", length = 100)
     private ResolutionOutcome resolutionOutcome;

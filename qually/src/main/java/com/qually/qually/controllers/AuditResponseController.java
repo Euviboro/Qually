@@ -22,7 +22,7 @@ public class AuditResponseController {
     @PostMapping("/bulk")
     public ResponseEntity<List<AuditResponseDTO>> submitBulkAnswers(
             @Valid @RequestBody BulkAuditAnswerRequestDTO dto) {
-        return ResponseEntity.ok(auditResponseService.submitBulkResponses(dto));
+        return ResponseEntity.ok(auditResponseService.saveBulkResponses(dto));
     }
 
     @GetMapping

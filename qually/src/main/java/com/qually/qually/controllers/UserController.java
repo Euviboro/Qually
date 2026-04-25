@@ -10,14 +10,6 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
-/**
- * REST controller for {@link com.qually.qually.models.User} resources.
- *
- * <p>Path variable changed from {@code /{email}} to {@code /{id}} because
- * the PK is now the auto-increment {@code user_id} (Integer), not the email.
- * The query param for role filter is renamed to {@code roleName} to match
- * the new {@code Role} entity's {@code roleName} field.</p>
- */
 @RestController
 @RequestMapping("/api/users")
 public class UserController {
@@ -33,10 +25,23 @@ public class UserController {
         return ResponseEntity.ok(userService.createUser(dto));
     }
 
+    /**
+     * @param roleName   Optional role name filter.
+     * @param activeOnly When true, returns only active users. Defaults to false.
+     * @param clientId   When set alongside auditable=true, filters to that client.
+     * @param auditable  When true, returns only users with auditable roles for the given client.
+     */
     @GetMapping
     public ResponseEntity<List<UserResponseDTO>> getAllUsers(
-            @RequestParam(required = false) String roleName) {
-        return ResponseEntity.ok(userService.getAllUsers(roleName));
+            @RequestParam(required = false) String roleName,
+            @RequestParam(required = false, defaultValue = "false") Boolean activeOnly,
+            @RequestParam(required = false) Integer clientId,
+            @RequestParam(required = false, defaultValue = "false") Boolean auditable) {
+
+        if (Boolean.TRUE.equals(auditable) && clientId != null) {
+            return ResponseEntity.ok(userService.getAuditableUsers(clientId));
+        }
+        return ResponseEntity.ok(userService.getAllUsers(roleName, activeOnly));
     }
 
     @GetMapping("/{id}")
@@ -48,5 +53,15 @@ public class UserController {
     public ResponseEntity<UserResponseDTO> updateUser(@PathVariable Integer id,
                                                       @Valid @RequestBody UserUpdateRequestDTO dto) {
         return ResponseEntity.ok(userService.updateUser(id, dto));
+    }
+
+    @PatchMapping("/{id}/deactivate")
+    public ResponseEntity<UserResponseDTO> deactivateUser(@PathVariable Integer id) {
+        return ResponseEntity.ok(userService.deactivateUser(id));
+    }
+
+    @PatchMapping("/{id}/reactivate")
+    public ResponseEntity<UserResponseDTO> reactivateUser(@PathVariable Integer id) {
+        return ResponseEntity.ok(userService.reactivateUser(id));
     }
 }

@@ -1,8 +1,8 @@
 import React, { lazy, Suspense } from "react";
 import ReactDOM from "react-dom/client";
-import { createBrowserRouter, RouterProvider, Outlet } from "react-router-dom";
+import { createBrowserRouter, RouterProvider, Outlet, Navigate } from "react-router-dom";
 import { AppShell } from "./components/layout/AppShell";
-import NotFoundPage from "./pages/NotFound/NotFoundPage";
+import { AuthProvider, useAuth } from "./context/AuthContext";
 import { PageSpinner } from "./components/ui/PageSpinner";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import "./index.css";
@@ -12,39 +12,81 @@ const NewProtocolPage    = lazy(() => import("./pages/NewProtocol/NewProtocolPag
 const ShowProtocolPage   = lazy(() => import("./pages/ShowProtocol/ShowProtocolPage"));
 const LogSessionPage     = lazy(() => import("./pages/LogSession/LogSessionPage"));
 const SessionResultsPage = lazy(() => import("./pages/SessionResults/SessionResultsPage"));
+const ResultsPage        = lazy(() => import("./pages/Results/ResultsPage"));
+const DisputeInboxPage   = lazy(() => import("./pages/DisputeInbox/DisputeInboxPage"));
+const SettingsPage       = lazy(() => import("./pages/Settings/SettingsPage"));
+const LoginPage          = lazy(() => import("./pages/Login/LoginPage"));
+
+/** Redirects to /login when no user is in context. */
+function RequireAuth({ children }) {
+  const { user } = useAuth();
+  if (!user) return <Navigate to="/login" replace />;
+  return children;
+}
+
+/** Redirects non-QA users away from QA-only routes. */
+function RequireQA({ children }) {
+  const { isQA } = useAuth();
+  if (!isQA) return <Navigate to="/results" replace />;
+  return children;
+}
+
+/**
+ * Smart index route: QA users land on the Dashboard, OPERATIONS users
+ * land on the Results page which is their effective homepage.
+ */
+function IndexRedirect() {
+  const { isQA } = useAuth();
+  return isQA
+    ? <DashboardPage />
+    : <Navigate to="/results" replace />;
+}
 
 const router = createBrowserRouter([
   {
+    path: "/login",
+    element: <Suspense fallback={<PageSpinner />}><LoginPage /></Suspense>,
+  },
+  {
     path: "/",
     element: (
-      <ErrorBoundary>
-        <AppShell />
-      </ErrorBoundary>
+      <RequireAuth>
+        <ErrorBoundary><AppShell /></ErrorBoundary>
+      </RequireAuth>
     ),
     children: [
       {
         element: (
           <ErrorBoundary>
-            <Suspense fallback={<PageSpinner />}>
-              <Outlet />
-            </Suspense>
+            <Suspense fallback={<PageSpinner />}><Outlet /></Suspense>
           </ErrorBoundary>
         ),
         children: [
-          { index: true,               element: <DashboardPage /> },
-          { path: "protocols/new",     element: <NewProtocolPage /> },
-          { path: "protocols/:id",     element: <ShowProtocolPage /> },
-          { path: "sessions/log",      element: <LogSessionPage /> },
-          { path: "sessions/:id",      element: <SessionResultsPage /> },
+          // Index: QA → Dashboard, OPERATIONS → /results
+          { index: true,          element: <IndexRedirect /> },
+
+          // QA-only routes — OPERATIONS users are redirected to /results
+          { path: "protocols/new", element: <RequireQA><NewProtocolPage /></RequireQA> },
+          { path: "protocols/:id", element: <RequireQA><ShowProtocolPage /></RequireQA> },
+          { path: "sessions/log",  element: <RequireQA><LogSessionPage /></RequireQA> },
+
+          // Shared routes
+          { path: "sessions/:id",     element: <SessionResultsPage /> },
+          { path: "results",          element: <ResultsPage /> },
+          { path: "disputes",         element: <DisputeInboxPage /> },
+
+          // QA-only settings
+          { path: "settings/users",   element: <RequireQA><SettingsPage /></RequireQA> },
         ],
       },
-      { path: "*", element: <NotFoundPage /> },
     ],
   },
 ]);
 
 ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>
-    <RouterProvider router={router} />
+    <AuthProvider>
+      <RouterProvider router={router} />
+    </AuthProvider>
   </React.StrictMode>
 );

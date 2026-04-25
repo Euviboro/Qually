@@ -2,73 +2,17 @@
 
 import { useState, useMemo, useCallback } from "react";
 import { createSession, updateSession, submitBulkResponses } from "../api/sessions";
+import { ANSWERS } from "../constants";
 
-/**
- * @typedef {Object} QuestionAnswer
- * @property {"YES"|"NO"|null} answer
- * @property {Record<number, number|null>} subattributes - subattributeId → optionId | null
- */
-
-/**
- * Top-level session metadata collected on the form.
- *
- * <p>Changes from the previous version:</p>
- * <ul>
- *   <li>{@code logicType} removed — scoring strategy is fixed on the protocol.</li>
- *   <li>{@code memberAudited} added — the name/ID of the person being audited.</li>
- *   <li>{@code auditorEmail} replaced by {@code auditorUserId} (number|null) —
- *       the auditor FK now references {@code users.user_id}.</li>
- * </ul>
- *
- * @typedef {Object} SessionMeta
- * @property {string}      interactionId
- * @property {string}      memberAudited
- * @property {number|null} auditorUserId
- * @property {string}      comments
- */
-
-/**
- * @typedef {Object} UseLogSessionResult
- * @property {SessionMeta} meta
- * @property {(field: keyof SessionMeta, value: string|number|null) => void} setMeta
- * @property {Record<number, QuestionAnswer>} answers
- * @property {(questionId: number, answer: "YES"|"NO") => void} setAnswer
- * @property {(questionId: number, subattributeId: number, optionId: number) => void} setSubattributeAnswer
- * @property {(questionId: number) => boolean} isQuestionExpanded
- * @property {number}  answeredCount
- * @property {number}  totalCount
- * @property {boolean} isComplete
- * @property {boolean} canSave
- * @property {boolean} saving
- * @property {string|null} saveError
- * @property {number|null} sessionId
- * @property {"DRAFT"|"COMPLETED"|null} savedStatus
- * @property {() => Promise<void>} saveDraft
- * @property {() => Promise<void>} submitSession
- */
-
-/**
- * Manages all state for the Log Session page.
- *
- * @param {import('../api/protocols').AuditProtocolResponseDTO|null} protocol
- * @returns {UseLogSessionResult}
- */
 export function useLogSession(protocol) {
-  // ── Session metadata ───────────────────────────────────────
-
   const [meta, setMetaState] = useState({
-    interactionId: "",
-    memberAudited: "",
-    auditorUserId: null,
-    comments:      "",
+    interactionId:       "",
+    lobId:               null,
+    auditorUserId:       null,
+    memberAuditedUserId: null,
+    comments:            "",
   });
 
-  /**
-   * Updates a single metadata field.
-   *
-   * @param {keyof SessionMeta} field
-   * @param {string|number|null} value
-   */
   const setMeta = useCallback((field, value) => {
     setMetaState((prev) => ({ ...prev, [field]: value }));
   }, []);
@@ -98,7 +42,8 @@ export function useLogSession(protocol) {
       [questionId]: {
         ...prev[questionId],
         answer,
-        subattributes: answer === "YES"
+        // Clear subattribute selections when switching away from NO
+        subattributes: answer !== ANSWERS.NO
           ? Object.fromEntries(
               Object.keys(prev[questionId]?.subattributes ?? {}).map((k) => [k, null])
             )
@@ -112,13 +57,17 @@ export function useLogSession(protocol) {
       ...prev,
       [questionId]: {
         ...prev[questionId],
-        subattributes: { ...prev[questionId]?.subattributes, [subattributeId]: optionId },
+        subattributes: {
+          ...prev[questionId]?.subattributes,
+          [subattributeId]: optionId,
+        },
       },
     }));
   }, []);
 
+  // Subattribute panel expands only for NO answers
   const isQuestionExpanded = useCallback(
-    (questionId) => answers[questionId]?.answer === "NO",
+    (questionId) => answers[questionId]?.answer === ANSWERS.NO,
     [answers]
   );
 
@@ -128,14 +77,11 @@ export function useLogSession(protocol) {
   const answeredCount = Object.values(answers).filter((a) => a.answer !== null).length;
   const isComplete    = totalCount > 0 && answeredCount === totalCount;
 
-  /**
-   * Required metadata: interactionId, memberAudited, and a selected auditor.
-   * Does NOT require all questions to be answered (that's `isComplete`).
-   */
   const canSave = Boolean(
     meta.interactionId.trim() &&
-    meta.memberAudited.trim() &&
-    meta.auditorUserId !== null
+    meta.lobId !== null &&
+    meta.auditorUserId !== null &&
+    meta.memberAuditedUserId !== null
   );
 
   // ── Persistence ────────────────────────────────────────────
@@ -148,10 +94,19 @@ export function useLogSession(protocol) {
   const buildResponseItems = useCallback(() =>
     Object.entries(answers)
       .filter(([, a]) => a.answer !== null)
-      .map(([questionId, a]) => ({
-        questionId:     parseInt(questionId, 10),
-        questionAnswer: a.answer,
-      })),
+      .map(([questionId, a]) => {
+        const subattributeAnswers = Object.values(a.subattributes ?? {})
+          .filter((optionId) => optionId !== null)
+          .map((optionId) => ({ subattributeOptionId: optionId }));
+
+        return {
+          questionId:     parseInt(questionId, 10),
+          questionAnswer: a.answer,
+          subattributeAnswers: subattributeAnswers.length > 0
+            ? subattributeAnswers
+            : undefined,
+        };
+      }),
     [answers]
   );
 
@@ -162,12 +117,13 @@ export function useLogSession(protocol) {
       let sid = sessionId;
       if (!sid) {
         const created = await createSession({
-          protocolId:    protocol.protocolId,
-          interactionId: meta.interactionId.trim(),
-          auditorUserId: meta.auditorUserId,
-          memberAudited: meta.memberAudited.trim(),
-          comments:      meta.comments.trim() || undefined,
-          auditStatus:   status,
+          protocolId:          protocol.protocolId,
+          interactionId:       meta.interactionId.trim(),
+          auditorUserId:       meta.auditorUserId,
+          memberAuditedUserId: meta.memberAuditedUserId,
+          lobId:               meta.lobId,
+          comments:            meta.comments.trim() || undefined,
+          auditStatus:         status,
         });
         sid = created.sessionId;
         setSessionId(sid);
@@ -177,10 +133,12 @@ export function useLogSession(protocol) {
           comments:    meta.comments.trim() || undefined,
         });
       }
+
       const items = buildResponseItems();
       if (items.length > 0) {
         await submitBulkResponses({ sessionId: sid, responses: items });
       }
+
       setSavedStatus(status);
     } catch (err) {
       setSaveError(err.message ?? "Something went wrong. Please try again.");
@@ -189,7 +147,7 @@ export function useLogSession(protocol) {
     }
   }, [sessionId, protocol, meta, buildResponseItems]);
 
-  const saveDraft    = useCallback(() => persist("DRAFT"),     [persist]);
+  const saveDraft     = useCallback(() => persist("DRAFT"),     [persist]);
   const submitSession = useCallback(() => persist("COMPLETED"), [persist]);
 
   return {

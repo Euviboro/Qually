@@ -2,9 +2,7 @@ package com.qually.qually.mappers;
 
 import com.qually.qually.dto.request.AuditSessionRequestDTO;
 import com.qually.qually.dto.response.AuditSessionResponseDTO;
-import com.qually.qually.models.AuditProtocol;
-import com.qually.qually.models.AuditSession;
-import com.qually.qually.models.User;
+import com.qually.qually.models.*;
 import com.qually.qually.models.enums.AuditStatus;
 import org.springframework.stereotype.Component;
 
@@ -13,76 +11,62 @@ import java.time.LocalDateTime;
 /**
  * Mapper for {@link AuditSession} ↔ DTO conversions.
  *
- * <p>Follows the same pattern as {@link AuditProtocolMapper} and
- * {@link AuditQuestionMapper}: the service resolves all entity references
- * (protocol, auditor) before calling the mapper, keeping the mapper free of
- * repository dependencies.</p>
+ * <p><strong>Item 17 — defensive null-checks removed on required fields:</strong>
+ * {@code auditProtocol} is declared {@code nullable = false} on the entity and
+ * enforced by a NOT NULL constraint in the database. Null-checking it in the
+ * mapper was masking potential data integrity issues — a session without a
+ * protocol is a corrupted record that should fail loudly, not silently produce
+ * a DTO with null protocol fields. The mapper now accesses {@code auditProtocol}
+ * and its {@code client} directly without null guards.</p>
  *
- * <p>{@code auditLogicType} is exposed in responses even though it lives on
- * the protocol — it is read from {@code session.getAuditProtocol()} so the
- * client always has the scoring context alongside the session data without a
- * separate protocol fetch.</p>
+ * <p>Fields that are legitimately nullable ({@code auditor},
+ * {@code memberAuditedUser}, {@code lob}, {@code resolutionOutcome}) retain
+ * their null-safe access patterns.</p>
  */
 @Component
 public class AuditSessionMapper {
 
-    /**
-     * Maps a persisted {@link AuditSession} to its response DTO.
-     *
-     * <p>{@code auditLogicType} is sourced from
-     * {@code session.getAuditProtocol().getAuditLogicType()} — it is a
-     * protocol-level field that no longer lives on the session entity.</p>
-     *
-     * @param session The managed entity. Must not be null.
-     * @return The fully populated response DTO.
-     */
     public AuditSessionResponseDTO toDTO(AuditSession session) {
+        // auditProtocol is NOT NULL — access directly. A NullPointerException here
+        // means a record was saved without a protocol, which is a data integrity
+        // issue that should surface rather than be silently swallowed.
         AuditProtocol protocol = session.getAuditProtocol();
-        User auditor = session.getAuditor();
+        Client         client  = protocol.getClient();
+
+        // These are legitimately nullable — null-safe access is correct here.
+        User auditor       = session.getAuditor();
+        User memberAudited = session.getMemberAuditedUser();
+        Lob  lob           = session.getLob();
 
         return AuditSessionResponseDTO.builder()
                 .sessionId(session.getSessionId())
                 .auditStatus(session.getAuditStatus().name())
                 .interactionId(session.getInteractionId())
-                .memberAudited(session.getMemberAudited())
                 .comments(session.getComments())
-                .protocolId(protocol != null ? protocol.getProtocolId() : null)
-                .protocolName(protocol != null ? protocol.getProtocolName() : null)
-                .protocolVersion(protocol != null ? protocol.getProtocolVersion() : null)
-                // auditLogicType lives on the protocol, not the session
-                .auditLogicType(protocol != null ? protocol.getAuditLogicType() : null)
+                .protocolId(protocol.getProtocolId())
+                .protocolName(protocol.getProtocolName())
+                .protocolVersion(protocol.getProtocolVersion())
+                .auditLogicType(protocol.getAuditLogicType())
+                .clientId(client.getClientId())
+                .clientName(client.getClientName())
                 .auditorUserId(auditor != null ? auditor.getUserId() : null)
                 .auditorName(auditor != null ? auditor.getFullName() : null)
+                .memberAuditedUserId(memberAudited != null ? memberAudited.getUserId() : null)
+                .memberAuditedName(memberAudited != null ? memberAudited.getFullName() : null)
+                .lobId(lob != null ? lob.getLobId() : null)
+                .lobName(lob != null ? lob.getLobName() : null)
                 .resolutionOutcome(session.getResolutionOutcome())
                 .startedAt(session.getStartedAt())
                 .submittedAt(session.getSubmittedAt())
                 .build();
     }
 
-    /**
-     * Maps an {@link AuditSessionRequestDTO} to a new (unsaved) entity.
-     *
-     * <p>The service is responsible for resolving {@code protocol} and
-     * {@code auditor} before calling this method — the same contract used by
-     * {@link AuditProtocolMapper#toEntity(com.qually.qually.dto.request.AuditProtocolRequestDTO, com.qually.qually.models.Client)}.</p>
-     *
-     * <p>Status defaulting and {@code submittedAt} auto-assignment are handled
-     * here so the service stays clean:</p>
-     * <ul>
-     *   <li>{@code null} status defaults to {@link AuditStatus#DRAFT}.</li>
-     *   <li>{@link AuditStatus#COMPLETED} triggers an automatic
-     *       {@code submittedAt = now()}.</li>
-     * </ul>
-     *
-     * @param dto     The incoming request payload.
-     * @param protocol The resolved protocol entity.
-     * @param auditor  The resolved auditor entity.
-     * @return A new, unsaved {@link AuditSession}.
-     */
     public AuditSession toEntity(AuditSessionRequestDTO dto,
                                   AuditProtocol protocol,
-                                  User auditor) {
-        AuditStatus status = (dto.getAuditStatus() != null)
+                                  User auditor,
+                                  User memberAudited,
+                                  Lob lob) {
+        AuditStatus status = dto.getAuditStatus() != null
                 ? dto.getAuditStatus()
                 : AuditStatus.DRAFT;
 
@@ -93,8 +77,9 @@ public class AuditSessionMapper {
         return AuditSession.builder()
                 .auditProtocol(protocol)
                 .auditor(auditor)
+                .memberAuditedUser(memberAudited)
+                .lob(lob)
                 .interactionId(dto.getInteractionId())
-                .memberAudited(dto.getMemberAudited())
                 .comments(dto.getComments())
                 .auditStatus(status)
                 .submittedAt(submittedAt)
