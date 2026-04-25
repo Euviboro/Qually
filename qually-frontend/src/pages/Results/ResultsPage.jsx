@@ -17,6 +17,8 @@ import { getResults } from "../../api/results";
 import { COPC_CATEGORY_META, AUDIT_STATUS_META } from "../../constants";
 import { ColumnFilter } from "../../components/ui/ColumnFilter";
 import { Pagination } from "../../components/ui/Pagination";
+import { useAuth } from "../../context/AuthContext";
+
 
 const PAGE_SIZE = 100;
 
@@ -138,6 +140,7 @@ const MAX_QUESTION_LABEL_LEN = 20;
 export default function ResultsPage() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
+  const { isQA } = useAuth();
 
   const protocolId = searchParams.get("protocolId") ? Number(searchParams.get("protocolId")) : undefined;
   const clientId   = searchParams.get("clientId")   ? Number(searchParams.get("clientId"))   : undefined;
@@ -268,7 +271,9 @@ export default function ResultsPage() {
       {/* Header */}
       <header className="flex items-center justify-between mb-6">
         <div>
-          <button onClick={() => navigate(-1)} className="text-lsg-blue hover:text-lsg-blue-dark text-sm font-medium mb-2 flex items-center gap-1 transition-colors">← Back</button>
+          {isQA && (
+            <button onClick={() => navigate(-1)} className="text-lsg-blue hover:text-lsg-blue-dark text-sm font-medium mb-2 flex items-center gap-1 transition-colors">← Back</button>
+          )}
           <h1 className="text-2xl font-bold text-text-pri tracking-tight">{pageTitle}</h1>
           <p className="text-text-ter text-sm mt-0.5">
             {loading
