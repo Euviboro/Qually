@@ -12,7 +12,7 @@ const base = import.meta.env.VITE_API_BASE;
  *
  * @param {string} path    - API path relative to the base URL.
  * @param {RequestInit} [options={}]
- * @returns {Promise<unknown>} Parsed JSON response body.
+ * @returns {Promise<unknown>} Parsed JSON response body, or null for empty responses.
  */
 async function request(path, options = {}) {
   const userId = localStorage.getItem("userId");
@@ -30,6 +30,21 @@ async function request(path, options = {}) {
     const err = await res.json().catch(() => ({}));
     throw new Error(err.message || `HTTP ${res.status}`);
   }
+
+  // Some endpoints return 200/204 with no body (e.g. flag/unflag).
+  // Calling .json() on an empty response throws "Unexpected end of JSON input".
+  // Guard: only parse JSON when the response actually has a body.
+  const contentType   = res.headers.get("Content-Type") ?? "";
+  const contentLength = res.headers.get("Content-Length");
+
+  if (
+    res.status === 204 ||
+    contentLength === "0" ||
+    !contentType.includes("application/json")
+  ) {
+    return null;
+  }
+
   return res.json();
 }
 
