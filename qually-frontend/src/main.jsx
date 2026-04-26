@@ -14,7 +14,7 @@ const LogSessionPage     = lazy(() => import("./pages/LogSession/LogSessionPage"
 const DraftsPage         = lazy(() => import("./pages/Drafts/DraftsPage"));
 const SessionResultsPage = lazy(() => import("./pages/SessionResults/SessionResultsPage"));
 const ResultsPage        = lazy(() => import("./pages/Results/ResultsPage"));
-const DisputeInboxPage   = lazy(() => import("./pages/DisputeInbox/DisputeInboxPage"));
+const DisputesPage       = lazy(() => import("./pages/Disputes/DisputesPage"));
 const SettingsPage       = lazy(() => import("./pages/Settings/SettingsPage"));
 const LoginPage          = lazy(() => import("./pages/Login/LoginPage"));
 
@@ -66,7 +66,7 @@ const router = createBrowserRouter([
           // Shared routes
           { path: "sessions/:id",   element: <SessionResultsPage /> },
           { path: "results",        element: <ResultsPage /> },
-          { path: "disputes",       element: <DisputeInboxPage /> },
+          { path: "disputes",       element: <DisputesPage /> },
 
           // QA-only settings
           { path: "settings/users", element: <RequireQA><SettingsPage /></RequireQA> },

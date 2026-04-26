@@ -3,6 +3,7 @@ package com.qually.qually.services;
 import com.qually.qually.dto.request.AuditDisputeRequestDTO;
 import com.qually.qually.dto.request.ResolveDisputeRequestDTO;
 import com.qually.qually.dto.response.AuditDisputeResponseDTO;
+import com.qually.qually.dto.response.DisputeInboxRowDTO;
 import com.qually.qually.mappers.AuditDisputeMapper;
 import com.qually.qually.models.*;
 import com.qually.qually.models.enums.AuditAnswerType;
@@ -18,23 +19,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.List;
+import java.util.stream.Stream;
 
-/**
- * Manages the full dispute lifecycle for individual audit responses.
- *
- * <p><strong>is_flagged migration:</strong> {@code ResponseStatus.FLAGGED} has
- * been removed from the lifecycle. All flag state is now tracked by the
- * {@code is_flagged} boolean on {@link AuditResponse}:</p>
- * <ul>
- *   <li>{@link #flagResponse} sets {@code isFlagged = true} (was {@code FLAGGED} status).</li>
- *   <li>{@link #unflagResponse} sets {@code isFlagged = false} (was reset to {@code ANSWERED}).</li>
- *   <li>{@link #raiseDispute} checks {@code isFlagged = true} as its precondition,
- *       then clears the flag and sets {@code responseStatus = DISPUTED}.</li>
- * </ul>
- *
- * <p>{@code responseStatus} now only tracks the formal dispute audit trail:
- * {@code ANSWERED → DISPUTED → RESOLVED}.</p>
- */
 @Service
 public class DisputeService {
 
@@ -64,17 +51,60 @@ public class DisputeService {
         this.auditScoreService = auditScoreService;
     }
 
-    // ── Flag ──────────────────────────────────────────────────
+    // ── Inbox ─────────────────────────────────────────────────
 
     /**
-     * Informally flags a response for Team Leader review.
+     * Returns the disputes inbox for the given user, scoped by their role.
      *
-     * <p>Sets {@code isFlagged = true}. Does not change {@code responseStatus} —
-     * flagging is not part of the formal dispute audit trail.</p>
-     *
-     * @throws IllegalArgumentException if the response is already flagged,
-     *                                  disputed, resolved, or is a YES answer.
+     * <p><strong>Visibility tiers:</strong></p>
+     * <ul>
+     *   <li><strong>OPERATIONS Team Member</strong> ({@code canRaiseDispute = false}) —
+     *       responses in sessions where they are the member audited, that are
+     *       flagged, disputed, or resolved.</li>
+     *   <li><strong>OPERATIONS Team Leader+</strong> ({@code canRaiseDispute = true}) —
+     *       same but for all direct reports (members whose {@code manager_id} is
+     *       this user), scoped to the user's assigned clients.</li>
+     *   <li><strong>QA</strong> — disputed and resolved responses from sessions
+     *       they personally audited. QA users who have subordinate QA auditors
+     *       (their userId appears as manager_id for another QA user) also see
+     *       those subordinates' audited sessions.</li>
+     * </ul>
      */
+    @Transactional(readOnly = true)
+    public List<DisputeInboxRowDTO> getInbox(Integer userId) {
+        User user = findUser(userId);
+        Department dept = getDepartment(user);
+
+        List<AuditResponse> responses;
+
+        if (Department.QA.equals(dept)) {
+            // Collect this user's ID plus any QA subordinates' IDs
+            List<Integer> auditorIds = Stream.concat(
+                    Stream.of(userId),
+                    userRepository.findByManager_UserId(userId).stream()
+                            .filter(u -> Department.QA.equals(getDepartment(u)))
+                            .map(User::getUserId)
+            ).toList();
+
+            responses = auditResponseRepository.findInboxByAuditors(auditorIds);
+
+        } else if (Boolean.TRUE.equals(user.getRole() != null
+                ? user.getRole().getCanRaiseDispute() : false)) {
+            // OPERATIONS TL+ — direct reports in their assigned clients
+            List<Integer> clientIds = user.getClients().stream()
+                    .map(Client::getClientId).toList();
+            responses = auditResponseRepository.findInboxByManagedMembers(userId, clientIds);
+
+        } else {
+            // OPERATIONS Team Member — own audited sessions
+            responses = auditResponseRepository.findInboxByMemberAudited(userId);
+        }
+
+        return responses.stream().map(this::toInboxRow).toList();
+    }
+
+    // ── Flag ──────────────────────────────────────────────────
+
     @Transactional
     public void flagResponse(Long responseId, Integer userId) {
         AuditResponse response = findResponse(responseId);
@@ -99,12 +129,6 @@ public class DisputeService {
         log.info("Response {} flagged by user {}", responseId, userId);
     }
 
-    /**
-     * Removes the informal flag from a response (TL rejected the flag).
-     * No paper trail is created — the response returns to its previous state.
-     *
-     * <p>Sets {@code isFlagged = false}. Does not change {@code responseStatus}.</p>
-     */
     @Transactional
     public void unflagResponse(Long responseId, Integer userId) {
         AuditResponse response = findResponse(responseId);
@@ -123,22 +147,13 @@ public class DisputeService {
 
     // ── Dispute ───────────────────────────────────────────────
 
-    /**
-     * Formally raises a dispute against a flagged response.
-     *
-     * <p>Precondition: {@code isFlagged = true}. On success:
-     * {@code isFlagged} is cleared, {@code responseStatus} moves to
-     * {@code DISPUTED}, and the parent session moves to {@code DISPUTED}.</p>
-     */
     @Transactional
     public AuditDisputeResponseDTO raiseDispute(AuditDisputeRequestDTO dto, Integer userId) {
         AuditResponse response = findResponse(dto.getResponseId());
         User user = findUser(userId);
 
-        // Precondition: response must be flagged (not just ANSWERED)
         if (!Boolean.TRUE.equals(response.getIsFlagged())) {
-            throw new IllegalArgumentException(
-                    "Only flagged responses can be formally disputed.");
+            throw new IllegalArgumentException("Only flagged responses can be formally disputed.");
         }
         if (response.getDispute() != null) {
             throw new IllegalArgumentException("This response already has an active dispute.");
@@ -164,12 +179,9 @@ public class DisputeService {
                 .build();
 
         auditDisputeRepository.save(dispute);
-
-        // Clear the flag and move to the formal DISPUTED state
         response.setIsFlagged(false);
         response.setResponseStatus(ResponseStatus.DISPUTED);
         auditResponseRepository.save(response);
-
         session.setAuditStatus(AuditStatus.DISPUTED);
         auditSessionRepository.save(session);
 
@@ -193,7 +205,6 @@ public class DisputeService {
         if (dispute.getResolutionOutcome() != null) {
             throw new IllegalArgumentException("This dispute has already been resolved.");
         }
-
         if (ResolutionOutcome.MODIFIED.equals(dto.getResolutionOutcome())) {
             if (dto.getNewAnswer() == null || dto.getNewAnswer().isBlank()) {
                 throw new IllegalArgumentException(
@@ -213,7 +224,6 @@ public class DisputeService {
         dispute.setResolutionDate(LocalDateTime.now());
         dispute.setResolutionNote(dto.getResolutionNote());
         dispute.setResolutionOutcome(dto.getResolutionOutcome());
-
         if (ResolutionOutcome.MODIFIED.equals(dto.getResolutionOutcome())) {
             dispute.setNewAnswer(dto.getNewAnswer());
         }
@@ -225,7 +235,6 @@ public class DisputeService {
         if (!auditDisputeRepository.hasUnresolvedDisputes(session.getSessionId())) {
             closeSession(session);
         }
-
         if (ResolutionOutcome.MODIFIED.equals(dto.getResolutionOutcome())) {
             auditScoreService.recalculateAndStoreScores(session.getSessionId());
         }
@@ -277,18 +286,64 @@ public class DisputeService {
 
     private void closeSession(AuditSession session) {
         session.setAuditStatus(AuditStatus.RESOLVED);
-
         boolean anyModified = auditDisputeRepository.findBySessionId(session.getSessionId())
                 .stream()
                 .anyMatch(d -> ResolutionOutcome.MODIFIED.equals(d.getResolutionOutcome()));
-
         session.setResolutionOutcome(anyModified
                 ? ResolutionOutcome.MODIFIED
                 : ResolutionOutcome.UNCHANGED);
-
         auditSessionRepository.save(session);
         log.info("Session {} closed with resolution outcome {}",
                 session.getSessionId(), session.getResolutionOutcome());
+    }
+
+    // ── Row mapping ───────────────────────────────────────────
+
+    private DisputeInboxRowDTO toInboxRow(AuditResponse r) {
+        AuditSession  session  = r.getAuditSession();
+        AuditProtocol protocol = session.getAuditProtocol();
+        AuditDispute  dispute  = r.getDispute();
+        Lob           lob      = session.getLob();
+        User          member   = session.getMemberAuditedUser();
+
+        String effectiveAnswer = r.getQuestionAnswer();
+        if (dispute != null
+                && ResolutionOutcome.MODIFIED.equals(dispute.getResolutionOutcome())
+                && dispute.getNewAnswer() != null) {
+            effectiveAnswer = dispute.getNewAnswer();
+        }
+
+        String displayStatus = Boolean.TRUE.equals(r.getIsFlagged())
+                ? "FLAGGED"
+                : r.getResponseStatus().name();
+
+        return DisputeInboxRowDTO.builder()
+                .sessionId(session.getSessionId())
+                .sessionDate(session.getStartedAt())
+                .clientName(protocol.getClient().getClientName())
+                .protocolName(protocol.getProtocolName())
+                .lobName(lob != null ? lob.getLobName() : null)
+                .interactionId(session.getInteractionId())
+                .memberAuditedName(member != null ? member.getFullName() : null)
+                .responseId(r.getAuditResponseId())
+                .questionText(r.getAuditQuestion().getQuestionText())
+                .category(r.getAuditQuestion().getCategory().name())
+                .originalAnswer(r.getQuestionAnswer())
+                .effectiveAnswer(effectiveAnswer)
+                .responseStatus(r.getResponseStatus().name())
+                .isFlagged(Boolean.TRUE.equals(r.getIsFlagged()))
+                .displayStatus(displayStatus)
+                .disputeId(dispute != null ? dispute.getDisputeId() : null)
+                .reasonText(dispute != null && dispute.getReason() != null
+                        ? dispute.getReason().getReasonText() : null)
+                .disputeComment(dispute != null ? dispute.getDisputeComment() : null)
+                .raisedByName(dispute != null && dispute.getRaisedBy() != null
+                        ? dispute.getRaisedBy().getFullName() : null)
+                .raisedAt(dispute != null ? dispute.getRaisedAt() : null)
+                .resolutionOutcome(dispute != null && dispute.getResolutionOutcome() != null
+                        ? dispute.getResolutionOutcome().name() : null)
+                .resolutionNote(dispute != null ? dispute.getResolutionNote() : null)
+                .build();
     }
 
     // ── Helpers ───────────────────────────────────────────────

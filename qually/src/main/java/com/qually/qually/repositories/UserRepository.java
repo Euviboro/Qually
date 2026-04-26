@@ -9,14 +9,6 @@ import org.springframework.stereotype.Repository;
 import java.util.List;
 import java.util.Optional;
 
-/**
- * Repository for {@link User}.
- *
- * <p>{@code findAuditableUsersByClient} has been updated to filter by
- * {@code role.canBeAudited = true} instead of matching against a hardcoded
- * list of role name strings. This means adding a new auditable role only
- * requires setting its flag in the database — no code change needed.</p>
- */
 @Repository
 public interface UserRepository extends JpaRepository<User, Integer> {
 
@@ -31,11 +23,6 @@ public interface UserRepository extends JpaRepository<User, Integer> {
     /**
      * Returns active users whose role has {@code can_be_audited = true}
      * and who belong to the given client.
-     *
-     * <p>Replaces the previous version which matched against a hardcoded list
-     * of role name strings. The flag-based approach means adding a new auditable
-     * role (e.g. "Senior Agent") only requires an {@code UPDATE roles} in the DB.
-     * </p>
      */
     @Query("""
         SELECT DISTINCT u FROM User u
@@ -46,6 +33,14 @@ public interface UserRepository extends JpaRepository<User, Integer> {
           AND u.isActive = true
     """)
     List<User> findAuditableUsersByClient(@Param("clientId") Integer clientId);
+
+    /**
+     * Returns all users who report directly to the given manager.
+     * Used by {@link com.qually.qually.services.DisputeService#getInbox}
+     * to find QA subordinates when building the inbox for a QA user above
+     * the specialist level.
+     */
+    List<User> findByManager_UserId(Integer managerId);
 
     List<User> findByFullNameContainingIgnoreCase(String fullName);
 }
