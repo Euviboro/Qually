@@ -4,6 +4,7 @@ import com.qually.qually.dto.request.AuditSessionRequestDTO;
 import com.qually.qually.dto.request.AuditSessionUpdateRequestDTO;
 import com.qually.qually.dto.response.AuditSessionResponseDTO;
 import com.qually.qually.dto.response.SessionResultsResponseDTO;
+import com.qually.qually.dto.response.SessionResumeDTO;
 import com.qually.qually.services.AuditSessionService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
@@ -28,10 +29,6 @@ public class AuditSessionController {
         return ResponseEntity.ok(auditSessionService.createSession(dto));
     }
 
-    /**
-     * Returns sessions filtered by auditor, status, and the current user's
-     * client access (OPERATIONS users only see their assigned clients).
-     */
     @GetMapping
     public ResponseEntity<List<AuditSessionResponseDTO>> getAllSessions(
             @RequestParam(required = false) Integer auditorUserId,
@@ -46,10 +43,21 @@ public class AuditSessionController {
         return ResponseEntity.ok(auditSessionService.getSessionById(id));
     }
 
-    /** Full session results: metadata + scores + responses with dispute info. */
     @GetMapping("/{id}/results")
     public ResponseEntity<SessionResultsResponseDTO> getSessionResults(@PathVariable Long id) {
         return ResponseEntity.ok(auditSessionService.getSessionResults(id));
+    }
+
+    /**
+     * Returns the minimal payload needed to resume a DRAFT session in the
+     * Log Session form: metadata fields + previously recorded answers with
+     * subattribute selections.
+     *
+     * <p>Only DRAFT sessions can be resumed — returns 403 for any other status.</p>
+     */
+    @GetMapping("/{id}/resume")
+    public ResponseEntity<SessionResumeDTO> getSessionForResume(@PathVariable Long id) {
+        return ResponseEntity.ok(auditSessionService.getSessionForResume(id));
     }
 
     @PutMapping("/{id}")

@@ -1,67 +1,95 @@
 /** @module hooks/useLogSession */
 
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useEffect } from "react";
 import { createSession, updateSession, submitBulkResponses } from "../api/sessions";
 import { ANSWERS } from "../constants";
 
 /**
- * @typedef {Object} SessionMeta
- * @property {string}      interactionId
- * @property {number|null} lobId
- * @property {number|null} memberAuditedUserId
- * @property {string}      comments
- */
-
-/**
- * Manages all state for the Log Session page.
- *
- * Changes from the previous version:
- * - `auditorUserId` removed from meta — the logged-in user IS the auditor.
- *   The caller passes `auditorUserId` as a parameter so the hook can include
- *   it in the session payload without exposing it as editable state.
- * - `canDraft` added — true when at least one question has been answered,
- *   regardless of whether session details are filled. Allows saving progress
- *   before all metadata is known.
- * - `missingFields` computed and returned — a human-readable list of what
- *   still needs to be completed before submission. Used by the page to render
- *   the "You are missing: …" warning when the user attempts to submit.
- * - Comments are mandatory when any current answer is NO. This is reflected
- *   in `missingFields` and in `canSubmit`.
+ * Manages all state for the Log Session page — both new sessions and resumed drafts.
  *
  * @param {import('../api/protocols').AuditProtocolResponseDTO|null} protocol
  * @param {number|null} auditorUserId - The logged-in user's ID (from AuthContext).
+ * @param {import('../api/sessions').SessionResumeDTO|null} [existingSession]
+ *   When provided, pre-populates all form fields and answers from the draft.
+ *   The session ID is also seeded so the next save updates the existing record
+ *   rather than creating a new one.
  */
-export function useLogSession(protocol, auditorUserId) {
+export function useLogSession(protocol, auditorUserId, existingSession = null) {
 
-  const [meta, setMetaState] = useState({
-    interactionId:       "",
-    lobId:               null,
-    memberAuditedUserId: null,
-    comments:            "",
-  });
+  // ── Meta state ─────────────────────────────────────────────
+
+  const [meta, setMetaState] = useState(() => ({
+    interactionId:       existingSession?.interactionId       ?? "",
+    lobId:               existingSession?.lobId               ?? null,
+    memberAuditedUserId: existingSession?.memberAuditedUserId ?? null,
+    comments:            existingSession?.comments            ?? "",
+  }));
 
   const setMeta = useCallback((field, value) => {
     setMetaState((prev) => ({ ...prev, [field]: value }));
   }, []);
 
-  // ── Per-question answers ───────────────────────────────────
+  // When existingSession changes (e.g. async load completes), sync meta
+  useEffect(() => {
+    if (!existingSession) return;
+    setMetaState({
+      interactionId:       existingSession.interactionId       ?? "",
+      lobId:               existingSession.lobId               ?? null,
+      memberAuditedUserId: existingSession.memberAuditedUserId ?? null,
+      comments:            existingSession.comments            ?? "",
+    });
+  }, [existingSession]);
 
+  // ── Answer state ───────────────────────────────────────────
+
+  /**
+   * Builds the initial answers map from the protocol's questions.
+   * When resuming, pre-populates answers and subattribute selections from
+   * the previously saved responses.
+   */
   const initialAnswers = useMemo(() => {
     if (!protocol?.auditQuestions) return {};
-    return Object.fromEntries(
-      protocol.auditQuestions.map((q) => [
-        q.questionId,
-        {
-          answer: null,
-          subattributes: Object.fromEntries(
-            (q.subattributes ?? []).map((s) => [s.subattributeId, null])
-          ),
-        },
-      ])
+
+    // Index resume responses by questionId for O(1) lookup
+    const resumeByQuestion = new Map(
+      (existingSession?.responses ?? []).map((r) => [r.questionId, r])
     );
-  }, [protocol]);
+
+    return Object.fromEntries(
+      protocol.auditQuestions.map((q) => {
+        const saved = resumeByQuestion.get(q.questionId);
+
+        // Build subattribute selections from the saved option IDs.
+        // The protocol gives us subattribute IDs; we need to map each
+        // subattribute to its previously selected option (if any).
+        const subattributes = Object.fromEntries(
+          (q.subattributes ?? []).map((s) => {
+            // Find whether any of the saved option IDs belongs to this subattribute
+            const matchingOptionId = saved?.subattributeOptionIds?.find((optId) =>
+              s.subattributeOptions?.some((o) => o.subattributeOptionId === optId)
+            ) ?? null;
+            return [s.subattributeId, matchingOptionId];
+          })
+        );
+
+        return [
+          q.questionId,
+          {
+            answer:        saved?.questionAnswer ?? null,
+            subattributes,
+          },
+        ];
+      })
+    );
+  }, [protocol, existingSession]);
 
   const [answers, setAnswers] = useState(initialAnswers);
+
+  // Re-sync answers when existingSession loads after initial render
+  useEffect(() => {
+    if (existingSession) setAnswers(initialAnswers);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [existingSession]);
 
   const setAnswer = useCallback((questionId, answer) => {
     setAnswers((prev) => ({
@@ -99,55 +127,37 @@ export function useLogSession(protocol, auditorUserId) {
   const totalCount    = questions.length;
   const answeredCount = Object.values(answers).filter((a) => a.answer !== null).length;
   const isComplete    = totalCount > 0 && answeredCount === totalCount;
+  const canDraft      = answeredCount > 0;
 
-  /** True as soon as any question has been answered — enables Save Draft. */
-  const canDraft = answeredCount > 0;
-
-  /**
-   * Checks whether comments are currently required.
-   * Comments are mandatory when at least one question is answered NO.
-   */
   const hasAnyNo = useMemo(
     () => Object.values(answers).some((a) => a.answer === ANSWERS.NO),
     [answers]
   );
-
   const commentsRequired = hasAnyNo;
 
-  /**
-   * Builds the human-readable list of incomplete fields.
-   * Used to render the warning on failed submit attempts.
-   * Includes question numbers (1-based) for unanswered questions.
-   */
   const missingFields = useMemo(() => {
     const missing = [];
-
     if (!meta.interactionId.trim()) missing.push("Interaction ID");
     if (!meta.lobId)                missing.push("LOB");
     if (!meta.memberAuditedUserId)  missing.push("Member Audited");
-
     const unansweredNums = questions
       .map((q, i) => (answers[q.questionId]?.answer == null ? i + 1 : null))
       .filter(Boolean);
-    if (unansweredNums.length > 0) {
-      missing.push(`Questions (${unansweredNums.join(", ")})`);
-    }
-
+    if (unansweredNums.length > 0) missing.push(`Questions (${unansweredNums.join(", ")})`);
     if (commentsRequired && !meta.comments.trim()) {
       missing.push("Comments (required when any answer is No)");
     }
-
     return missing;
   }, [meta, questions, answers, commentsRequired]);
 
-  /** All fields complete — enables Submit Session. */
   const canSubmit = missingFields.length === 0 && totalCount > 0;
 
   // ── Persistence ────────────────────────────────────────────
 
   const [saving,      setSaving]      = useState(false);
   const [saveError,   setSaveError]   = useState(null);
-  const [sessionId,   setSessionId]   = useState(null);
+  // Seed sessionId from the existing draft so the next save is an update
+  const [sessionId,   setSessionId]   = useState(existingSession?.sessionId ?? null);
   const [savedStatus, setSavedStatus] = useState(null);
 
   const buildResponseItems = useCallback(() =>
@@ -177,7 +187,7 @@ export function useLogSession(protocol, auditorUserId) {
         const created = await createSession({
           protocolId:          protocol.protocolId,
           interactionId:       meta.interactionId.trim() || `DRAFT-${Date.now()}`,
-          auditorUserId,                        // from AuthContext, not meta
+          auditorUserId,
           memberAuditedUserId: meta.memberAuditedUserId,
           lobId:               meta.lobId,
           comments:            meta.comments.trim() || undefined,
@@ -196,8 +206,10 @@ export function useLogSession(protocol, auditorUserId) {
         await submitBulkResponses({ sessionId: sid, responses: items });
       }
       setSavedStatus(status);
+      return sid;
     } catch (err) {
       setSaveError(err.message ?? "Something went wrong. Please try again.");
+      return null;
     } finally {
       setSaving(false);
     }

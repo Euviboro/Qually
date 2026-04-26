@@ -4,54 +4,65 @@ import { api } from "./apiClient";
 
 /**
  * @typedef {Object} AuditSessionRequestDTO
- * @property {number}                  protocolId
- * @property {string}                  interactionId
- * @property {number}                  auditorUserId
- * @property {number}                  memberAuditedUserId
- * @property {number}                  lobId
- * @property {string}                  [comments]
- * @property {"DRAFT"|"COMPLETED"}     [auditStatus]
+ * @property {number}              protocolId
+ * @property {string}              interactionId
+ * @property {number}              auditorUserId
+ * @property {number}              memberAuditedUserId
+ * @property {number}              lobId
+ * @property {string}              [comments]
+ * @property {"DRAFT"|"COMPLETED"} [auditStatus]
  */
 
 /**
  * @typedef {Object} AuditSessionResponseDTO
- * @property {number}                        sessionId
- * @property {"DRAFT"|"COMPLETED"|"DISPUTED"|"RESOLVED"} auditStatus
- * @property {string}                        interactionId
- * @property {string}                        memberAuditedName
- * @property {string}                        [comments]
- * @property {number}                        protocolId
- * @property {string}                        protocolName
- * @property {number}                        protocolVersion
- * @property {"STANDARD"|"ACCOUNTABILITY"}   auditLogicType
- * @property {number}                        clientId
- * @property {string}                        clientName
- * @property {number|null}                   auditorUserId
- * @property {string|null}                   auditorName
- * @property {number|null}                   memberAuditedUserId
- * @property {number|null}                   lobId
- * @property {string|null}                   lobName
- * @property {"UNCHANGED"|"MODIFIED"|null}   resolutionOutcome
- * @property {string}                        [startedAt]
- * @property {string}                        [submittedAt]
+ * @property {number}                                        sessionId
+ * @property {"DRAFT"|"COMPLETED"|"DISPUTED"|"RESOLVED"}    auditStatus
+ * @property {string}                                        interactionId
+ * @property {string}                                        [comments]
+ * @property {number}                                        protocolId
+ * @property {string}                                        protocolName
+ * @property {number}                                        protocolVersion
+ * @property {"STANDARD"|"ACCOUNTABILITY"}                   auditLogicType
+ * @property {number}                                        clientId
+ * @property {string}                                        clientName
+ * @property {number|null}                                   auditorUserId
+ * @property {string|null}                                   auditorName
+ * @property {number|null}                                   memberAuditedUserId
+ * @property {string|null}                                   memberAuditedName
+ * @property {number|null}                                   lobId
+ * @property {string|null}                                   lobName
+ * @property {"UNCHANGED"|"MODIFIED"|null}                   resolutionOutcome
+ * @property {string}                                        [startedAt]
+ * @property {string}                                        [submittedAt]
  */
 
 /**
- * A single subattribute option selection within a bulk response item.
- *
+ * @typedef {Object} ResumeResponseItemDTO
+ * @property {number}   questionId
+ * @property {string}   questionAnswer          - "YES", "NO", or "N/A".
+ * @property {number[]} subattributeOptionIds   - Previously selected option IDs (may be empty).
+ */
+
+/**
+ * @typedef {Object} SessionResumeDTO
+ * @property {number}                  sessionId
+ * @property {string}                  interactionId
+ * @property {number|null}             lobId
+ * @property {number|null}             memberAuditedUserId
+ * @property {string|null}             comments
+ * @property {ResumeResponseItemDTO[]} responses
+ */
+
+/**
  * @typedef {Object} SubattributeAnswerItemDTO
- * @property {number} subattributeOptionId - FK to subattribute_options.
+ * @property {number} subattributeOptionId
  */
 
 /**
- * A single question answer within a bulk response submission.
- *
  * @typedef {Object} AuditResponseItemDTO
  * @property {number}   questionId
- * @property {string}   questionAnswer      - "YES", "NO", or "N/A".
+ * @property {string}   questionAnswer
  * @property {SubattributeAnswerItemDTO[]} [subattributeAnswers]
- *   Option selections for sub-criteria. Only sent when questionAnswer is "NO"
- *   and the auditor made at least one selection. Omitted otherwise.
  */
 
 /**
@@ -77,12 +88,29 @@ export const getSessions = ({ auditorUserId, auditStatus } = {}) => {
   return api.get(qs ? `/sessions?${qs}` : "/sessions");
 };
 
+/**
+ * Fetches all DRAFT sessions visible to the current user.
+ *
+ * @returns {Promise<AuditSessionResponseDTO[]>}
+ */
+export const getDraftSessions = () =>
+  api.get("/sessions?auditStatus=DRAFT");
+
 export const getSessionById = (sessionId) =>
   api.get(`/sessions/${sessionId}`);
 
 /**
+ * Fetches the resume payload for a DRAFT session — metadata fields and
+ * previously recorded answers including subattribute selections.
+ *
+ * @param {number} sessionId
+ * @returns {Promise<SessionResumeDTO>}
+ */
+export const getSessionForResume = (sessionId) =>
+  api.get(`/sessions/${sessionId}/resume`);
+
+/**
  * Creates a new audit session.
- * Omit {@code auditStatus} to default to DRAFT.
  *
  * @param {AuditSessionRequestDTO} sessionData
  * @returns {Promise<AuditSessionResponseDTO>}
@@ -94,8 +122,7 @@ export const updateSession = (sessionId, data) =>
   api.put(`/sessions/${sessionId}`, data);
 
 /**
- * Submits bulk YES/NO/N/A answers for a session, including any subattribute
- * option selections made for NO answers.
+ * Submits bulk answers for a session including subattribute selections.
  *
  * @param {BulkAuditAnswerRequestDTO} dto
  * @returns {Promise<AuditResponseDTO[]>}

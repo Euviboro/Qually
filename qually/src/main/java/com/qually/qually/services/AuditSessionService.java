@@ -19,6 +19,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 @Service
 public class AuditSessionService {
@@ -31,6 +33,7 @@ public class AuditSessionService {
     private final LobRepository lobRepository;
     private final AuditResponseRepository auditResponseRepository;
     private final SessionScoreRepository sessionScoreRepository;
+    private final SubattributeResponseRepository subattributeResponseRepository;
     private final AuditSessionMapper auditSessionMapper;
     private final AuditDisputeMapper auditDisputeMapper;
     private final SessionScoreMapper sessionScoreMapper;
@@ -41,6 +44,7 @@ public class AuditSessionService {
                                LobRepository lobRepository,
                                AuditResponseRepository auditResponseRepository,
                                SessionScoreRepository sessionScoreRepository,
+                               SubattributeResponseRepository subattributeResponseRepository,
                                AuditSessionMapper auditSessionMapper,
                                AuditDisputeMapper auditDisputeMapper,
                                SessionScoreMapper sessionScoreMapper) {
@@ -50,6 +54,7 @@ public class AuditSessionService {
         this.lobRepository = lobRepository;
         this.auditResponseRepository = auditResponseRepository;
         this.sessionScoreRepository = sessionScoreRepository;
+        this.subattributeResponseRepository = subattributeResponseRepository;
         this.auditSessionMapper = auditSessionMapper;
         this.auditDisputeMapper = auditDisputeMapper;
         this.sessionScoreMapper = sessionScoreMapper;
@@ -151,6 +156,64 @@ public class AuditSessionService {
                 .session(auditSessionMapper.toDTO(session))
                 .scores(scores)
                 .responses(responses)
+                .build();
+    }
+
+    /**
+     * Returns the minimal data needed to resume a DRAFT session in the
+     * Log Session form: session metadata fields + previously recorded answers
+     * including subattribute option selections.
+     *
+     * <p>Uses two bulk queries — one for responses, one for subattribute
+     * selections — then joins them in memory. No N+1.</p>
+     *
+     * @throws EntityNotFoundException  if the session does not exist.
+     * @throws IllegalStateException    if the session is not a DRAFT.
+     */
+    @Transactional(readOnly = true)
+    public SessionResumeDTO getSessionForResume(Long sessionId) {
+        AuditSession session = auditSessionRepository.findById(sessionId)
+                .orElseThrow(() -> new EntityNotFoundException(
+                        "Audit session with ID %d not found".formatted(sessionId)));
+
+        if (!AuditStatus.DRAFT.equals(session.getAuditStatus())) {
+            throw new IllegalStateException(
+                    "Only DRAFT sessions can be resumed (current status: %s)"
+                            .formatted(session.getAuditStatus()));
+        }
+
+        // Bulk fetch responses
+        List<AuditResponse> responses =
+                auditResponseRepository.findByAuditSession_SessionId(sessionId);
+
+        // Bulk fetch subattribute selections, grouped by audit response ID
+        Map<Long, List<Long>> optionsByResponseId =
+                subattributeResponseRepository.findBySessionIdWithDetails(sessionId)
+                        .stream()
+                        .collect(Collectors.groupingBy(
+                                sr -> sr.getAuditResponse().getAuditResponseId(),
+                                Collectors.mapping(
+                                        sr -> sr.getSelectedOption().getSubattributeOptionId(),
+                                        Collectors.toList())));
+
+        List<SessionResumeDTO.ResumeResponseItemDTO> resumeResponses = responses.stream()
+                .map(r -> SessionResumeDTO.ResumeResponseItemDTO.builder()
+                        .questionId(r.getAuditQuestion().getQuestionId())
+                        .questionAnswer(r.getQuestionAnswer())
+                        .subattributeOptionIds(
+                                optionsByResponseId.getOrDefault(
+                                        r.getAuditResponseId(), List.of()))
+                        .build())
+                .toList();
+
+        return SessionResumeDTO.builder()
+                .sessionId(session.getSessionId())
+                .interactionId(session.getInteractionId())
+                .lobId(session.getLob() != null ? session.getLob().getLobId() : null)
+                .memberAuditedUserId(session.getMemberAuditedUser() != null
+                        ? session.getMemberAuditedUser().getUserId() : null)
+                .comments(session.getComments())
+                .responses(resumeResponses)
                 .build();
     }
 
