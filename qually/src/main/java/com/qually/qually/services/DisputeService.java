@@ -19,6 +19,22 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 
+/**
+ * Manages the full dispute lifecycle for individual audit responses.
+ *
+ * <p><strong>is_flagged migration:</strong> {@code ResponseStatus.FLAGGED} has
+ * been removed from the lifecycle. All flag state is now tracked by the
+ * {@code is_flagged} boolean on {@link AuditResponse}:</p>
+ * <ul>
+ *   <li>{@link #flagResponse} sets {@code isFlagged = true} (was {@code FLAGGED} status).</li>
+ *   <li>{@link #unflagResponse} sets {@code isFlagged = false} (was reset to {@code ANSWERED}).</li>
+ *   <li>{@link #raiseDispute} checks {@code isFlagged = true} as its precondition,
+ *       then clears the flag and sets {@code responseStatus = DISPUTED}.</li>
+ * </ul>
+ *
+ * <p>{@code responseStatus} now only tracks the formal dispute audit trail:
+ * {@code ANSWERED → DISPUTED → RESOLVED}.</p>
+ */
 @Service
 public class DisputeService {
 
@@ -50,53 +66,79 @@ public class DisputeService {
 
     // ── Flag ──────────────────────────────────────────────────
 
+    /**
+     * Informally flags a response for Team Leader review.
+     *
+     * <p>Sets {@code isFlagged = true}. Does not change {@code responseStatus} —
+     * flagging is not part of the formal dispute audit trail.</p>
+     *
+     * @throws IllegalArgumentException if the response is already flagged,
+     *                                  disputed, resolved, or is a YES answer.
+     */
     @Transactional
     public void flagResponse(Long responseId, Integer userId) {
         AuditResponse response = findResponse(responseId);
         User user = findUser(userId);
 
+        if (Boolean.TRUE.equals(response.getIsFlagged())) {
+            throw new IllegalArgumentException("Response is already flagged.");
+        }
         if (ResponseStatus.ANSWERED != response.getResponseStatus()) {
             throw new IllegalArgumentException(
                     "Only ANSWERED responses can be flagged (current status: %s)"
-                    .formatted(response.getResponseStatus()));
+                            .formatted(response.getResponseStatus()));
         }
-        // YES answers cannot be disputed — use enum instead of string literal
         if (AuditAnswerType.YES.matches(response.getQuestionAnswer())) {
             throw new IllegalArgumentException("YES answers cannot be flagged.");
         }
 
         checkCanFlag(user, response.getAuditSession());
 
-        response.setResponseStatus(ResponseStatus.FLAGGED);
+        response.setIsFlagged(true);
         auditResponseRepository.save(response);
         log.info("Response {} flagged by user {}", responseId, userId);
     }
 
+    /**
+     * Removes the informal flag from a response (TL rejected the flag).
+     * No paper trail is created — the response returns to its previous state.
+     *
+     * <p>Sets {@code isFlagged = false}. Does not change {@code responseStatus}.</p>
+     */
     @Transactional
     public void unflagResponse(Long responseId, Integer userId) {
         AuditResponse response = findResponse(responseId);
         User user = findUser(userId);
 
-        if (ResponseStatus.FLAGGED != response.getResponseStatus()) {
+        if (!Boolean.TRUE.equals(response.getIsFlagged())) {
             throw new IllegalArgumentException("Response is not flagged.");
         }
 
         checkCanFlag(user, response.getAuditSession());
 
-        response.setResponseStatus(ResponseStatus.ANSWERED);
+        response.setIsFlagged(false);
         auditResponseRepository.save(response);
         log.info("Response {} unflagged by user {}", responseId, userId);
     }
 
     // ── Dispute ───────────────────────────────────────────────
 
+    /**
+     * Formally raises a dispute against a flagged response.
+     *
+     * <p>Precondition: {@code isFlagged = true}. On success:
+     * {@code isFlagged} is cleared, {@code responseStatus} moves to
+     * {@code DISPUTED}, and the parent session moves to {@code DISPUTED}.</p>
+     */
     @Transactional
     public AuditDisputeResponseDTO raiseDispute(AuditDisputeRequestDTO dto, Integer userId) {
         AuditResponse response = findResponse(dto.getResponseId());
         User user = findUser(userId);
 
-        if (ResponseStatus.FLAGGED != response.getResponseStatus()) {
-            throw new IllegalArgumentException("Only FLAGGED responses can be formally disputed.");
+        // Precondition: response must be flagged (not just ANSWERED)
+        if (!Boolean.TRUE.equals(response.getIsFlagged())) {
+            throw new IllegalArgumentException(
+                    "Only flagged responses can be formally disputed.");
         }
         if (response.getDispute() != null) {
             throw new IllegalArgumentException("This response already has an active dispute.");
@@ -122,8 +164,12 @@ public class DisputeService {
                 .build();
 
         auditDisputeRepository.save(dispute);
+
+        // Clear the flag and move to the formal DISPUTED state
+        response.setIsFlagged(false);
         response.setResponseStatus(ResponseStatus.DISPUTED);
         auditResponseRepository.save(response);
+
         session.setAuditStatus(AuditStatus.DISPUTED);
         auditSessionRepository.save(session);
 
@@ -137,8 +183,8 @@ public class DisputeService {
 
     @Transactional
     public AuditDisputeResponseDTO resolveDispute(Integer disputeId,
-                                                   ResolveDisputeRequestDTO dto,
-                                                   Integer userId) {
+                                                  ResolveDisputeRequestDTO dto,
+                                                  Integer userId) {
         AuditDispute dispute = auditDisputeRepository.findById(disputeId)
                 .orElseThrow(() -> new EntityNotFoundException(
                         "Dispute with ID %d not found".formatted(disputeId)));
@@ -153,8 +199,7 @@ public class DisputeService {
                 throw new IllegalArgumentException(
                         "A new answer is required when resolution outcome is MODIFIED.");
             }
-            // Validate the new answer is a known value
-            AuditAnswerType.fromValue(dto.getNewAnswer()); // throws if invalid
+            AuditAnswerType.fromValue(dto.getNewAnswer());
             if (dto.getNewAnswer().equals(dispute.getResponse().getQuestionAnswer())) {
                 throw new IllegalArgumentException(
                         "New answer must differ from the original answer.");

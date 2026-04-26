@@ -66,7 +66,7 @@ public class AuditSessionService {
         User memberAudited = userRepository.findById(dto.getMemberAuditedUserId())
                 .orElseThrow(() -> new EntityNotFoundException(
                         "Member audited with ID %d not found"
-                        .formatted(dto.getMemberAuditedUserId())));
+                                .formatted(dto.getMemberAuditedUserId())));
 
         if (dto.getAuditorUserId().equals(dto.getMemberAuditedUserId())) {
             throw new IllegalArgumentException(
@@ -189,7 +189,7 @@ public class AuditSessionService {
         String effectiveAnswer = response.getQuestionAnswer();
         if (response.getDispute() != null
                 && ResolutionOutcome.MODIFIED.equals(
-                        response.getDispute().getResolutionOutcome())
+                response.getDispute().getResolutionOutcome())
                 && response.getDispute().getNewAnswer() != null) {
             effectiveAnswer = response.getDispute().getNewAnswer();
         }
@@ -201,6 +201,7 @@ public class AuditSessionService {
                 .originalAnswer(response.getQuestionAnswer())
                 .effectiveAnswer(effectiveAnswer)
                 .responseStatus(response.getResponseStatus().name())
+                .isFlagged(Boolean.TRUE.equals(response.getIsFlagged()))
                 .dispute(auditDisputeMapper.toDTO(response.getDispute()))
                 .build();
     }

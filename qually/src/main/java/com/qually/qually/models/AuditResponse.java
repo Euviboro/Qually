@@ -9,10 +9,14 @@ import lombok.*;
  *
  * <p><strong>Changes:</strong></p>
  * <ul>
- *   <li>{@code responseStatus} added — tracks the dispute lifecycle for this
- *       individual response (ANSWERED → FLAGGED → DISPUTED → RESOLVED).</li>
- *   <li>{@code dispute} relationship added — the formal dispute entry, if one
- *       was raised against this response. {@code null} for most responses.</li>
+ *   <li>{@code isFlagged} added — a boolean flag set by OPERATIONS users to
+ *       informally mark a response for Team Leader review. This is separate from
+ *       the formal dispute lifecycle tracked by {@code responseStatus}.
+ *       When a TL formally raises a dispute, {@code isFlagged} is cleared and
+ *       {@code responseStatus} moves to {@code DISPUTED}.</li>
+ *   <li>{@code responseStatus} now only tracks the formal dispute lifecycle:
+ *       {@code ANSWERED → DISPUTED → RESOLVED}. The {@code FLAGGED} value has
+ *       been removed — flagging is now represented by {@code isFlagged}.</li>
  * </ul>
  */
 @Entity
@@ -32,19 +36,35 @@ public class AuditResponse {
     /**
      * Original answer recorded by the auditor.
      * Valid values: {@code "YES"}, {@code "NO"}, {@code "N/A"}.
-     * Never overwritten — dispute overrides are stored in {@link AuditDispute#getNewAnswer()}.
+     * Never overwritten — dispute overrides are stored in
+     * {@link AuditDispute#getNewAnswer()}.
      */
     @Column(name = "question_answer", nullable = false, length = 100)
     private String questionAnswer;
 
     /**
-     * Dispute lifecycle status for this response.
-     * Defaults to ANSWERED when the response is first saved.
+     * Formal dispute lifecycle status.
+     * Defaults to {@link ResponseStatus#ANSWERED} when first saved.
+     * Does not include FLAGGED — see {@link #isFlagged}.
      */
     @Enumerated(EnumType.STRING)
     @Column(name = "response_status", nullable = false, length = 20)
     @Builder.Default
     private ResponseStatus responseStatus = ResponseStatus.ANSWERED;
+
+    /**
+     * Whether this response has been informally flagged by an OPERATIONS user
+     * for Team Leader review. This is a temporary, internal state — it has no
+     * QA-facing meaning and is not part of the formal dispute audit trail.
+     *
+     * <p>Set to {@code true} by {@code DisputeService.flagResponse}.
+     * Cleared to {@code false} when the TL raises a formal dispute (via
+     * {@code raiseDispute}) or when the flag is rejected (via
+     * {@code unflagResponse}).</p>
+     */
+    @Column(name = "is_flagged", nullable = false)
+    @Builder.Default
+    private Boolean isFlagged = false;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "session_id", nullable = false)
