@@ -3,6 +3,7 @@ package com.qually.qually.services;
 import com.qually.qually.dto.response.PagedResultsResponseDTO;
 import com.qually.qually.dto.response.ResultsTableRowDTO;
 import com.qually.qually.models.*;
+import com.qually.qually.models.enums.AuditStatus;
 import com.qually.qually.models.enums.Department;
 import com.qually.qually.models.enums.ResolutionOutcome;
 import com.qually.qually.repositories.*;
@@ -21,16 +22,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-/**
- * Builds the paginated flat rows for the Results table.
- *
- * <p><strong>Item 6 fix:</strong> the hardcoded {@code TEAM_MEMBER_HIERARCHY = 7}
- * constant used to identify Team Members has been removed. The visibility tier
- * now uses {@code role.canBeAudited} — if a user's role has this flag set, they
- * are treated as a Team Member for visibility purposes (they see only sessions
- * where they are the member audited). This means the tier assignment is driven
- * by data, not by a magic number that silently breaks when roles change.</p>
- */
 @Service
 public class ResultsService {
 
@@ -71,11 +62,9 @@ public class ResultsService {
         Pageable pageable = PageRequest.of(page, effectiveSize,
                 Sort.by(Sort.Direction.DESC, "startedAt"));
 
-        // Query 1 — paginated sessions with all associations eagerly loaded
         Page<AuditSession> sessionPage = fetchByVisibility(currentUser, pageable);
         List<AuditSession> sessions = sessionPage.getContent();
 
-        // Context filters applied in memory (page is small, ≤ 200 rows)
         sessions = applyFilters(sessions, protocolId, clientId, auditorId, memberId);
 
         log.debug("ResultsService: page={} size={} visibility-count={} after-filter={}",
@@ -95,19 +84,17 @@ public class ResultsService {
                 .map(AuditSession::getSessionId)
                 .toList();
 
-        // Query 2 — bulk score fetch
         Map<Long, List<SessionScore>> scoresBySession =
                 sessionScoreRepository.findByAuditSession_SessionIdIn(sessionIds)
                         .stream()
                         .collect(Collectors.groupingBy(
                                 s -> s.getAuditSession().getSessionId()));
 
-        // Query 3 — bulk response fetch (only when answers requested)
         Map<Long, List<AuditResponse>> responsesBySession = includeAnswers
                 ? auditResponseRepository.findBySessionIdInWithDetails(sessionIds)
-                        .stream()
-                        .collect(Collectors.groupingBy(
-                                r -> r.getAuditSession().getSessionId()))
+                .stream()
+                .collect(Collectors.groupingBy(
+                        r -> r.getAuditSession().getSessionId()))
                 : Map.of();
 
         List<ResultsTableRowDTO> rows = sessions.stream()
@@ -128,32 +115,13 @@ public class ResultsService {
 
     // ── Visibility ────────────────────────────────────────────
 
-    /**
-     * Determines which sessions the user can see.
-     *
-     * <p><strong>Item 6 fix:</strong> the Team Member tier was previously
-     * identified by {@code hierarchyLevel >= TEAM_MEMBER_HIERARCHY (7)}.
-     * It now uses {@code role.canBeAudited} — a user whose role has this flag
-     * set is treated as a Team Member for visibility (they see only sessions
-     * where they are the member being audited). A role rename or hierarchy
-     * renumbering no longer affects this logic.</p>
-     *
-     * <p>Visibility tiers in order of precedence:</p>
-     * <ol>
-     *   <li>QA department — all sessions.</li>
-     *   <li>OPERATIONS, {@code role.canBeAudited = true} — own sessions only.</li>
-     *   <li>OPERATIONS, {@code role.canBeAudited = false} — client-scoped.</li>
-     * </ol>
-     */
     private Page<AuditSession> fetchByVisibility(User user, Pageable pageable) {
         Department dept = user.getRole() != null ? user.getRole().getDepartment() : null;
 
-        // QA sees everything
         if (Department.QA.equals(dept)) {
             return auditSessionRepository.findAllWithDetails(pageable);
         }
 
-        // OPERATIONS Team Member (canRaiseDispute = false) — own sessions only
         boolean isTeamMemberTier = user.getRole() != null
                 && !Boolean.TRUE.equals(user.getRole().getCanRaiseDispute());
 
@@ -162,7 +130,6 @@ public class ResultsService {
                     user.getUserId(), pageable);
         }
 
-        // OPERATIONS Team Leader and above (canRaiseDispute = true) — client-scoped
         List<Integer> clientIds = user.getClients().stream()
                 .map(Client::getClientId)
                 .toList();
@@ -173,14 +140,24 @@ public class ResultsService {
         }
         return auditSessionRepository.findByClientIdsWithDetails(clientIds, pageable);
     }
+
     // ── Filters ───────────────────────────────────────────────
 
+    /**
+     * Applies optional context filters to the session page.
+     *
+     * <p>DRAFT sessions are always excluded — they belong in the Drafts page
+     * and must never appear in the Results table. This is enforced here as well
+     * as on the frontend as a belt-and-suspenders measure.</p>
+     */
     private List<AuditSession> applyFilters(List<AuditSession> sessions,
-                                             Integer protocolId,
-                                             Integer clientId,
-                                             Integer auditorId,
-                                             Integer memberId) {
+                                            Integer protocolId,
+                                            Integer clientId,
+                                            Integer auditorId,
+                                            Integer memberId) {
         return sessions.stream()
+                // DRAFT sessions never appear in the Results table
+                .filter(s -> s.getAuditStatus() != AuditStatus.DRAFT)
                 .filter(s -> protocolId == null ||
                         protocolId.equals(s.getAuditProtocol().getProtocolId()))
                 .filter(s -> clientId == null ||
@@ -244,7 +221,7 @@ public class ResultsService {
                     String effective = r.getQuestionAnswer();
                     if (r.getDispute() != null
                             && ResolutionOutcome.MODIFIED.equals(
-                                    r.getDispute().getResolutionOutcome())
+                            r.getDispute().getResolutionOutcome())
                             && r.getDispute().getNewAnswer() != null) {
                         effective = r.getDispute().getNewAnswer();
                     }

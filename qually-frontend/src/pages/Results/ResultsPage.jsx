@@ -1,13 +1,11 @@
 /**
  * @module pages/Results/ResultsPage
  *
- * Context-aware results table with column filters and numbered pagination.
- *
- * The backend now returns a {@link PagedResultsResponseDTO} instead of a plain
- * array. The page index is managed here and passed to the API on every change.
- * Column filters are applied to the current page only (the backend handles
- * the visibility scoping; the frontend handles the fine-grained column
- * filtering within the returned page).
+ * Changes in this version:
+ * - Column order updated: Date, Client, Protocol, LOB, Interaction ID, Member Audited
+ * - Interaction ID column added (plain header, no filter — values are unique per session)
+ * - Auditor column removed
+ * - DRAFT sessions filtered out client-side (belt-and-suspenders — backend also excludes them)
  */
 
 import { useState, useMemo, useCallback, useRef, useEffect } from "react";
@@ -18,7 +16,6 @@ import { COPC_CATEGORY_META, AUDIT_STATUS_META } from "../../constants";
 import { ColumnFilter } from "../../components/ui/ColumnFilter";
 import { Pagination } from "../../components/ui/Pagination";
 import { useAuth } from "../../context/AuthContext";
-
 
 const PAGE_SIZE = 100;
 
@@ -147,13 +144,11 @@ export default function ResultsPage() {
   const auditorId  = searchParams.get("auditorId")  ? Number(searchParams.get("auditorId"))  : undefined;
   const memberId   = searchParams.get("memberId")   ? Number(searchParams.get("memberId"))   : undefined;
 
-  // ── Pagination state ───────────────────────────────────────
   const [currentPage,          setCurrentPage]          = useState(0);
   const [showQuestions,        setShowQuestions]        = useState(false);
   const [protocolGuardOpen,    setProtocolGuardOpen]    = useState(false);
   const [activeProtocolFilter, setActiveProtocolFilter] = useState(protocolId ?? null);
 
-  // Reset to page 0 when any filter context changes
   useEffect(() => { setCurrentPage(0); }, [protocolId, clientId, auditorId, memberId]);
 
   const { data: pagedResult, loading, error } = useAsync(
@@ -169,11 +164,17 @@ export default function ResultsPage() {
     [activeProtocolFilter, showQuestions, protocolId, clientId, auditorId, memberId, currentPage]
   );
 
-  const rows         = pagedResult?.content       ?? [];
+  const allRows      = pagedResult?.content       ?? [];
   const totalElements = pagedResult?.totalElements ?? 0;
   const totalPages   = pagedResult?.totalPages    ?? 0;
 
-  // ── Column filters (applied to current page) ───────────────
+  // Belt-and-suspenders: exclude DRAFT sessions client-side too
+  const rows = useMemo(
+    () => allRows.filter((r) => r.auditStatus !== "DRAFT"),
+    [allRows]
+  );
+
+  // ── Column filters ─────────────────────────────────────────
 
   const [filters, setFilters] = useState({});
   const setFilter = useCallback((col, val) =>
@@ -182,10 +183,9 @@ export default function ResultsPage() {
   const uniqueVals = useMemo(() => {
     const get = (key) => [...new Set(rows.map((r) => r[key]).filter(Boolean))].sort();
     return {
-      lobName:           get("lobName"),
-      protocolName:      get("protocolName"),
       clientName:        get("clientName"),
-      auditorName:       get("auditorName"),
+      protocolName:      get("protocolName"),
+      lobName:           get("lobName"),
       memberAuditedName: get("memberAuditedName"),
       customerScore:     [...new Set(rows.map((r) => r.customerScore).filter((v) => v != null))].sort(),
       businessScore:     [...new Set(rows.map((r) => r.businessScore).filter((v) => v != null))].sort(),
@@ -244,7 +244,7 @@ export default function ResultsPage() {
 
   const handlePageChange = (page) => {
     setCurrentPage(page);
-    setFilters({});          // clear column filters when navigating pages
+    setFilters({});
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
@@ -306,18 +306,17 @@ export default function ResultsPage() {
         </div>
       ) : (
         <>
-          {/* Table */}
           <div className="overflow-x-auto rounded-xl border border-border-sec bg-bg-primary shadow-card">
             <table className="min-w-full text-sm border-collapse">
               <thead>
                 <tr className="border-b border-border-ter bg-bg-secondary/50">
+
+                  {/* Filterable columns — Date, Client, Protocol, LOB, Member Audited */}
                   {[
-                    { key: "sessionDate",       label: "Date",     type: "date"  },
-                    { key: "clientName",        label: "Client",   type: "text"  },
-                    { key: "lobName",           label: "LOB",      type: "text"  },
-                    { key: "protocolName",      label: "Protocol", type: "text"  },
-                    { key: "memberAuditedName", label: "Member",   type: "text"  },
-                    { key: "auditorName",       label: "Auditor",  type: "text"  },
+                    { key: "sessionDate",       label: "Date",     type: "date" },
+                    { key: "clientName",        label: "Client",   type: "text" },
+                    { key: "protocolName",      label: "Protocol", type: "text" },
+                    { key: "lobName",           label: "LOB",      type: "text" },
                   ].map(({ key, label, type }) => (
                     <th key={key} className="px-4 py-3 text-left whitespace-nowrap">
                       <ColumnFilter label={label} values={uniqueVals[key] ?? []}
@@ -326,6 +325,21 @@ export default function ResultsPage() {
                     </th>
                   ))}
 
+                  {/* Interaction ID — plain header, no filter (values are unique per session) */}
+                  <th className="px-4 py-3 text-left whitespace-nowrap">
+                    <span className="text-[11px] font-bold text-text-sec uppercase tracking-wider">
+                      Interaction ID
+                    </span>
+                  </th>
+
+                  {/* Member Audited — filterable */}
+                  <th className="px-4 py-3 text-left whitespace-nowrap">
+                    <ColumnFilter label="Member Audited" values={uniqueVals.memberAuditedName ?? []}
+                      activeFilter={filters.memberAuditedName ?? new Set()}
+                      onChange={(v) => setFilter("memberAuditedName", v)} type="text" />
+                  </th>
+
+                  {/* Score columns */}
                   {[
                     { key: "customerScore",   label: "Customer"   },
                     { key: "businessScore",   label: "Business"   },
@@ -338,12 +352,14 @@ export default function ResultsPage() {
                     </th>
                   ))}
 
+                  {/* Status */}
                   <th className="px-4 py-3 text-left whitespace-nowrap">
                     <ColumnFilter label="Status" values={uniqueVals.auditStatus}
                       activeFilter={filters.auditStatus ?? new Set()}
                       onChange={(v) => setFilter("auditStatus", v)} />
                   </th>
 
+                  {/* Question columns */}
                   {showQuestions && questionHeaders.map((q) => {
                     const truncated = q.questionText.length > MAX_QUESTION_LABEL_LEN
                       ? q.questionText.slice(0, MAX_QUESTION_LABEL_LEN) + "…"
@@ -378,10 +394,10 @@ export default function ResultsPage() {
                       {row.sessionDate ? new Date(row.sessionDate).toLocaleDateString() : "—"}
                     </td>
                     <td className="px-4 py-3 text-xs text-text-pri whitespace-nowrap">{row.clientName ?? "—"}</td>
-                    <td className="px-4 py-3 text-xs text-text-pri whitespace-nowrap">{row.lobName ?? "—"}</td>
                     <td className="px-4 py-3 text-xs text-text-pri whitespace-nowrap max-w-[160px] truncate" title={row.protocolName}>{row.protocolName ?? "—"}</td>
+                    <td className="px-4 py-3 text-xs text-text-pri whitespace-nowrap">{row.lobName ?? "—"}</td>
+                    <td className="px-4 py-3 text-xs text-text-ter whitespace-nowrap font-mono">{row.interactionId ?? "—"}</td>
                     <td className="px-4 py-3 text-xs text-text-pri whitespace-nowrap">{row.memberAuditedName ?? "—"}</td>
-                    <td className="px-4 py-3 text-xs text-text-pri whitespace-nowrap">{row.auditorName ?? "—"}</td>
                     <td className="px-4 py-3 text-center"><ScorePill score={row.customerScore} /></td>
                     <td className="px-4 py-3 text-center"><ScorePill score={row.businessScore} /></td>
                     <td className="px-4 py-3 text-center"><ScorePill score={row.complianceScore} /></td>
@@ -405,14 +421,12 @@ export default function ResultsPage() {
             </table>
           </div>
 
-          {/* Pagination */}
           <Pagination
             currentPage={currentPage}
             totalPages={totalPages}
             onPageChange={handlePageChange}
           />
 
-          {/* Page info */}
           {totalPages > 1 && (
             <p className="text-center text-xs text-text-ter -mt-2 pb-2">
               Page {currentPage + 1} of {totalPages} · {totalElements.toLocaleString()} total
