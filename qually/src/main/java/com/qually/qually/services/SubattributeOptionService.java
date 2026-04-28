@@ -2,6 +2,7 @@ package com.qually.qually.services;
 
 import com.qually.qually.dto.request.SubattributeOptionRequestDTO;
 import com.qually.qually.dto.response.SubattributeOptionResponseDTO;
+import com.qually.qually.mappers.SubattributeOptionMapper;
 import com.qually.qually.models.Subattribute;
 import com.qually.qually.models.SubattributeOption;
 import com.qually.qually.repositories.SubattributeOptionRepository;
@@ -23,11 +24,13 @@ public class SubattributeOptionService {
 
     private final SubattributeOptionRepository subattributeOptionRepository;
     private final SubattributeRepository subattributeRepository;
+    private final SubattributeOptionMapper subattributeOptionMapper;
 
     public SubattributeOptionService(SubattributeOptionRepository subattributeOptionRepository,
-                                     SubattributeRepository subattributeRepository) {
+                                     SubattributeRepository subattributeRepository, SubattributeOptionMapper subattributeOptionMapper) {
         this.subattributeOptionRepository = subattributeOptionRepository;
         this.subattributeRepository = subattributeRepository;
+        this.subattributeOptionMapper = subattributeOptionMapper;
     }
 
     /**
@@ -59,18 +62,8 @@ public class SubattributeOptionService {
                 .orElseThrow(() -> new EntityNotFoundException(
                         "Subattribute with id %d not found".formatted(dto.getSubattributeId())));
 
-        SubattributeOption subattributeOption = SubattributeOption.builder()
-                .subattribute(subattribute)
-                .optionLabel(dto.getOptionLabel())
-                .build();
+        SubattributeOption saved = subattributeOptionRepository.save(subattributeOptionMapper.toEntity(dto, subattribute));
 
-        return toDTO(subattributeOptionRepository.save(subattributeOption));
-    }
-
-    private SubattributeOptionResponseDTO toDTO(SubattributeOption subattributeOption) {
-        return SubattributeOptionResponseDTO.builder()
-                .subattributeOptionId(subattributeOption.getSubattributeOptionId())
-                .optionLabel(subattributeOption.getOptionLabel())
-                .build();
+        return subattributeOptionMapper.toDTO(saved);
     }
 }

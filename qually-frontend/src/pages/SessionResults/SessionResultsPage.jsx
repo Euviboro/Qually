@@ -102,7 +102,6 @@ function StatusBadge({ status }) {
  */
 function ResponseStatusBadge({ status }) {
   const cfg = {
-    FLAGGED:  { label: "Flagged",  cls: "bg-warning-surface text-warning-on" },
     DISPUTED: { label: "Disputed", cls: "bg-error-surface text-error-on"     },
     RESOLVED: { label: "Resolved", cls: "bg-success-surface text-success-on" },
   }[status];
@@ -149,7 +148,7 @@ export default function SessionResultsPage() {
   const sessionClientId = session.clientId ?? null;
   const hasClientAccess = isQA || userClientIds.includes(sessionClientId);
   const canFlag         = isOperations && hasClientAccess;
-  const canDispute      = canFlag && (user?.hierarchyLevel ?? 99) <= 6;
+  const canDispute = canFlag && Boolean(user?.canRaiseDispute);
   const canResolve      = isQA;
 
   return (
@@ -213,7 +212,7 @@ export default function SessionResultsPage() {
         <div className="flex flex-col gap-3">
           {responses.map((r, idx) => {
             const meta       = COPC_CATEGORY_META[r.category];
-            const isFlagged  = r.responseStatus === "FLAGGED";
+            const isFlagged  = Boolean(r.isFlagged);
             const isDisputed = r.responseStatus === "DISPUTED";
             const isResolved = r.responseStatus === "RESOLVED";
             const isAnswered = r.responseStatus === "ANSWERED";
@@ -282,7 +281,7 @@ export default function SessionResultsPage() {
 
                 {/* Action buttons */}
                 <div className="flex gap-2 mt-3 flex-wrap">
-                  {canFlag && isAnswered && r.originalAnswer !== "YES" && (
+                  {canFlag && isAnswered && !isFlagged && r.originalAnswer !== "YES" && (
                     <button
                       onClick={() => setDisputeTarget(r)}
                       className="text-[11px] font-bold px-3 py-1.5 rounded-md border border-warning-on text-warning-on hover:bg-warning-surface transition-all"

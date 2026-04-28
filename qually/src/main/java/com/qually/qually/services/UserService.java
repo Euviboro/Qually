@@ -3,6 +3,7 @@ package com.qually.qually.services;
 import com.qually.qually.dto.request.UserRequestDTO;
 import com.qually.qually.dto.request.UserUpdateRequestDTO;
 import com.qually.qually.dto.response.UserResponseDTO;
+import com.qually.qually.mappers.UserMapper;
 import com.qually.qually.models.*;
 import com.qually.qually.repositories.*;
 import jakarta.persistence.EntityNotFoundException;
@@ -11,7 +12,9 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.Collectors;
 
 @Service
 public class UserService {
@@ -21,13 +24,16 @@ public class UserService {
     private final UserRepository userRepository;
     private final RoleRepository roleRepository;
     private final ClientRepository clientRepository;
+    private final UserMapper userMapper;
 
     public UserService(UserRepository userRepository,
                        RoleRepository roleRepository,
-                       ClientRepository clientRepository) {
+                       ClientRepository clientRepository,
+                       UserMapper userMapper) {
         this.userRepository = userRepository;
         this.roleRepository = roleRepository;
         this.clientRepository = clientRepository;
+        this.userMapper = userMapper;
     }
 
     @Transactional
@@ -41,21 +47,13 @@ public class UserService {
         User manager = resolveManager(dto.getManagerId());
         List<Client> clients = resolveClients(dto.getClientIds());
 
-        User user = User.builder()
-                .userEmail(dto.getUserEmail())
-                .fullName(dto.getFullName())
-                .role(role)
-                .manager(manager)
-                .isActive(true)
-                .build();
-        user.setClients(clients);
-        User saved = userRepository.save(user);
+        User saved = userRepository.save(userMapper.toEntity(dto, role, manager, clients));
 
         log.info("User {} created — email '{}', role '{}'",
                 saved.getUserId(), saved.getUserEmail(),
                 role != null ? role.getRoleName() : "none");
 
-        return toDTO(saved);
+        return userMapper.toDTO(saved);
     }
 
     @Transactional(readOnly = true)
@@ -70,13 +68,13 @@ public class UserService {
                     ? userRepository.findByIsActiveTrue()
                     : userRepository.findAll();
         }
-        return users.stream().map(this::toDTO).toList();
+        return users.stream().map(userMapper::toDTO).toList();
     }
 
     @Transactional(readOnly = true)
     public UserResponseDTO getUserById(Integer id) {
         return userRepository.findById(id)
-                .map(this::toDTO)
+                .map(userMapper::toDTO)
                 .orElseThrow(() -> new EntityNotFoundException(
                         "User with ID %d not found".formatted(id)));
     }
@@ -84,7 +82,7 @@ public class UserService {
     @Transactional(readOnly = true)
     public List<UserResponseDTO> getAuditableUsers(Integer clientId) {
         return userRepository.findAuditableUsersByClient(clientId)
-                .stream().map(this::toDTO).toList();
+                .stream().map(userMapper::toDTO).toList();
     }
 
     @Transactional
@@ -97,7 +95,7 @@ public class UserService {
         if (dto.getManagerId() != null) user.setManager(resolveManager(dto.getManagerId()));
         if (dto.getClientIds() != null) user.setClients(resolveClients(dto.getClientIds()));
         log.info("User {} updated", id);
-        return toDTO(userRepository.save(user));
+        return userMapper.toDTO(userRepository.save(user));
     }
 
     @Transactional
@@ -107,7 +105,7 @@ public class UserService {
                         "User with ID %d not found".formatted(id)));
         user.setIsActive(false);
         log.info("User {} ({}) deactivated", id, user.getUserEmail());
-        return toDTO(userRepository.save(user));
+        return userMapper.toDTO(userRepository.save(user));
     }
 
     @Transactional
@@ -117,7 +115,7 @@ public class UserService {
                         "User with ID %d not found".formatted(id)));
         user.setIsActive(true);
         log.info("User {} ({}) reactivated", id, user.getUserEmail());
-        return toDTO(userRepository.save(user));
+        return userMapper.toDTO(userRepository.save(user));
     }
 
     // ── Helpers ───────────────────────────────────────────────
@@ -137,12 +135,12 @@ public class UserService {
     }
 
     private List<Client> resolveClients(List<Integer> clientIds) {
-        if (clientIds == null || clientIds.isEmpty()) return List.of();
+        if (clientIds == null || clientIds.isEmpty()) return new ArrayList<>();
         return clientIds.stream()
                 .map(id -> clientRepository.findById(id)
                         .orElseThrow(() -> new EntityNotFoundException(
                                 "Client with ID %d not found".formatted(id))))
-                .toList();
+                .collect(Collectors.toList()); // mutable — not .toList()
     }
 
     private UserResponseDTO toDTO(User user) {
