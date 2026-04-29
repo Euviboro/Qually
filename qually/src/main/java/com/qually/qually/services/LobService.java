@@ -2,32 +2,34 @@ package com.qually.qually.services;
 
 import com.qually.qually.dto.request.LobRequestDTO;
 import com.qually.qually.dto.response.LobResponseDTO;
+import com.qually.qually.mappers.LobMapper;
 import com.qually.qually.models.Client;
 import com.qually.qually.models.Lob;
 import com.qually.qually.repositories.ClientRepository;
 import com.qually.qually.repositories.LobRepository;
 import jakarta.persistence.EntityNotFoundException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 
-/**
- * Service for CRUD operations on {@link Lob} entities.
- *
- * <p>{@code UserRepository} dependency and all team-leader logic have been
- * removed. The {@code lobs} table only has {@code lob_id}, {@code lob_name},
- * and {@code client_id}.</p>
- */
 @Service
 public class LobService {
 
+    private static final Logger log = LoggerFactory.getLogger(LobService.class);
+
     private final LobRepository lobRepository;
     private final ClientRepository clientRepository;
+    private final LobMapper lobMapper;
 
-    public LobService(LobRepository lobRepository, ClientRepository clientRepository) {
-        this.lobRepository = lobRepository;
+    public LobService(LobRepository lobRepository,
+                      ClientRepository clientRepository,
+                      LobMapper lobMapper) {
+        this.lobRepository    = lobRepository;
         this.clientRepository = clientRepository;
+        this.lobMapper        = lobMapper;
     }
 
     @Transactional
@@ -38,35 +40,30 @@ public class LobService {
 
         lobRepository.findByLobNameAndClient_ClientId(dto.getLobName(), dto.getClientId())
                 .ifPresent(existing -> {
+                    log.warn("Duplicate LOB name '{}' rejected for client {}",
+                            dto.getLobName(), dto.getClientId());
                     throw new IllegalArgumentException(
-                            "A LOB named '%s' already exists for this client".formatted(dto.getLobName()));
+                            "A LOB named '%s' already exists for this client"
+                                    .formatted(dto.getLobName()));
                 });
 
-        Lob lob = Lob.builder()
-                .lobName(dto.getLobName())
-                .client(client)
-                .build();
-        return toDTO(lobRepository.save(lob));
+        Lob saved = lobRepository.save(lobMapper.toEntity(dto, client));
+        log.info("LOB {} '{}' created for client {}", saved.getLobId(), saved.getLobName(), client.getClientId());
+        return lobMapper.toDTO(saved);
     }
 
     @Transactional(readOnly = true)
     public List<LobResponseDTO> getAllLobs(Integer clientId) {
-        List<Lob> lobs;
-        if (clientId != null) {
-            Client client = clientRepository.findById(clientId)
-                    .orElseThrow(() -> new EntityNotFoundException(
-                            "Client with ID %d not found".formatted(clientId)));
-            lobs = lobRepository.findByClient(client);
-        } else {
-            lobs = lobRepository.findAll();
-        }
-        return lobs.stream().map(this::toDTO).toList();
+        List<Lob> lobs = (clientId != null)
+                ? lobRepository.findByClient_ClientId(clientId)
+                : lobRepository.findAll();
+        return lobs.stream().map(lobMapper::toDTO).toList();
     }
 
     @Transactional(readOnly = true)
     public LobResponseDTO getLobById(Integer id) {
         return lobRepository.findById(id)
-                .map(this::toDTO)
+                .map(lobMapper::toDTO)
                 .orElseThrow(() -> new EntityNotFoundException(
                         "LOB with ID %d not found".formatted(id)));
     }
@@ -84,20 +81,23 @@ public class LobService {
                 .filter(existing -> !existing.getLobId().equals(id))
                 .ifPresent(existing -> {
                     throw new IllegalArgumentException(
-                            "A LOB named '%s' already exists for this client".formatted(dto.getLobName()));
+                            "A LOB named '%s' already exists for this client"
+                                    .formatted(dto.getLobName()));
                 });
 
         lob.setLobName(dto.getLobName());
         lob.setClient(client);
-        return toDTO(lobRepository.save(lob));
+        Lob saved = lobRepository.save(lob);
+        log.info("LOB {} updated — name '{}', client {}", id, dto.getLobName(), dto.getClientId());
+        return lobMapper.toDTO(saved);
     }
 
-    private LobResponseDTO toDTO(Lob lob) {
-        return LobResponseDTO.builder()
-                .lobId(lob.getLobId())
-                .lobName(lob.getLobName())
-                .clientId(lob.getClient().getClientId())
-                .clientName(lob.getClient().getClientName())
-                .build();
+    @Transactional
+    public void deleteLob(Integer id) {
+        if (!lobRepository.existsById(id)) {
+            throw new EntityNotFoundException("LOB with ID %d not found".formatted(id));
+        }
+        lobRepository.deleteById(id);
+        log.info("LOB {} deleted", id);
     }
 }

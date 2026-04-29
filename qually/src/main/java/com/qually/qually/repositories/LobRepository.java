@@ -18,4 +18,6 @@ import java.util.Optional;
 public interface LobRepository extends JpaRepository<Lob, Integer> {
     List<Lob> findByClient(Client client);
     Optional<Lob> findByLobNameAndClient_ClientId(String lobName, Integer clientId);
+
+    List<Lob> findByClient_ClientId(Integer clientId);
 }
