@@ -1,15 +1,11 @@
 /**
  * @module pages/Results/ResultsPage
- *
- * Changes in this version:
- * - Column order updated: Date, Client, Protocol, LOB, Interaction ID, Member Audited
- * - Interaction ID column added (plain header, no filter — values are unique per session)
- * - Auditor column removed
- * - DRAFT sessions filtered out client-side (belt-and-suspenders — backend also excludes them)
+
  */
 
 import { useState, useMemo, useCallback, useRef, useEffect } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
+import { createPortal } from "react-dom";
 import { useAsync } from "../../hooks/useAsync";
 import { getResults } from "../../api/results";
 import { COPC_CATEGORY_META, AUDIT_STATUS_META } from "../../constants";
@@ -45,7 +41,7 @@ function StatusBadge({ status }) {
   );
 }
 
-// ── Answer pill for question columns ─────────────────────────
+// ── Answer pill ───────────────────────────────────────────────
 
 function AnswerPill({ answer }) {
   if (!answer) return <span className="text-text-ter text-xs">—</span>;
@@ -88,32 +84,45 @@ function ProtocolGuardModal({ protocols, onSelect, onClose }) {
   );
 }
 
-// ── Kebab menu ────────────────────────────────────────────────
+// ── Kebab menu — portal-based, anchored to click point ────────
 
 function KebabMenu({ sessionId, navigate }) {
   const [open, setOpen] = useState(false);
-  const ref = useRef(null);
+  const [pos, setPos] = useState({ top: 0, left: 0 });
+  const btnRef  = useRef(null);
+  const menuRef = useRef(null);
+
+  const handleOpen = () => {
+    const rect = btnRef.current.getBoundingClientRect();
+    setPos({ top: rect.bottom + window.scrollY + 4, left: rect.left });
+    setOpen(true);
+  };
 
   useEffect(() => {
+    if (!open) return;
     const handler = (e) => {
-      if (ref.current && !ref.current.contains(e.target)) setOpen(false);
+      if (menuRef.current && !menuRef.current.contains(e.target) &&
+          btnRef.current  && !btnRef.current.contains(e.target)) {
+        setOpen(false);
+      }
     };
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
-  }, []);
+  }, [open]);
 
   return (
-    <div ref={ref} className="relative inline-block">
-      <button onClick={() => setOpen((v) => !v)}
+    <>
+      <button ref={btnRef} onClick={handleOpen}
         className="p-1.5 rounded-md text-text-ter hover:text-text-pri hover:bg-bg-tertiary transition-colors">
         <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
-          <circle cx="8" cy="3" r="1.5"/>
-          <circle cx="8" cy="8" r="1.5"/>
-          <circle cx="8" cy="13" r="1.5"/>
+          <circle cx="8" cy="3" r="1.5"/><circle cx="8" cy="8" r="1.5"/><circle cx="8" cy="13" r="1.5"/>
         </svg>
       </button>
-      {open && (
-        <div className="absolute right-0 top-full mt-1 z-50 bg-bg-primary border border-border-sec rounded-lg shadow-lg w-44 py-1">
+
+      {open && createPortal(
+        <div ref={menuRef}
+          style={{ position: "fixed", top: pos.top, left: pos.left, zIndex: 9999 }}
+          className="bg-bg-primary border border-border-sec rounded-lg shadow-lg w-48 py-1">
           <button
             onClick={() => { navigate(`/sessions/${sessionId}`); setOpen(false); }}
             className="w-full text-left px-4 py-2 text-sm text-text-sec hover:bg-bg-secondary transition-colors flex items-center gap-2"
@@ -124,9 +133,10 @@ function KebabMenu({ sessionId, navigate }) {
             </svg>
             View Audit Results
           </button>
-        </div>
+        </div>,
+        document.body
       )}
-    </div>
+    </>
   );
 }
 
@@ -164,18 +174,16 @@ export default function ResultsPage() {
     [activeProtocolFilter, showQuestions, protocolId, clientId, auditorId, memberId, currentPage]
   );
 
-  const allRows      = pagedResult?.content       ?? [];
+  const allRows       = pagedResult?.content       ?? [];
   const totalElements = pagedResult?.totalElements ?? 0;
-  const totalPages   = pagedResult?.totalPages    ?? 0;
+  const totalPages    = pagedResult?.totalPages    ?? 0;
 
-  // Belt-and-suspenders: exclude DRAFT sessions client-side too
   const rows = useMemo(
     () => allRows.filter((r) => r.auditStatus !== "DRAFT"),
     [allRows]
   );
 
   // ── Column filters ─────────────────────────────────────────
-
   const [filters, setFilters] = useState({});
   const setFilter = useCallback((col, val) =>
     setFilters((prev) => ({ ...prev, [col]: val })), []);
@@ -195,25 +203,20 @@ export default function ResultsPage() {
     };
   }, [rows]);
 
-  const filtered = useMemo(() => {
-    return rows.filter((r) => {
-      for (const [col, set] of Object.entries(filters)) {
-        if (!set || set.size === 0) continue;
-        if (col === "sessionDate") {
-          const dayStr = r.sessionDate
-            ? new Date(r.sessionDate).toISOString().slice(0, 10)
-            : null;
-          if (!dayStr || !set.has(dayStr)) return false;
-        } else {
-          if (!set.has(r[col])) return false;
-        }
+  const filtered = useMemo(() => rows.filter((r) => {
+    for (const [col, set] of Object.entries(filters)) {
+      if (!set || set.size === 0) continue;
+      if (col === "sessionDate") {
+        const dayStr = r.sessionDate ? new Date(r.sessionDate).toISOString().slice(0, 10) : null;
+        if (!dayStr || !set.has(dayStr)) return false;
+      } else {
+        if (!set.has(r[col])) return false;
       }
-      return true;
-    });
-  }, [rows, filters]);
+    }
+    return true;
+  }), [rows, filters]);
 
   // ── Question columns ───────────────────────────────────────
-
   const questionHeaders = useMemo(() => {
     if (!showQuestions || !filtered.length) return [];
     const first = filtered.find((r) => r.questionAnswers?.length);
@@ -248,10 +251,10 @@ export default function ResultsPage() {
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
-  const pageTitle = clientId   ? "Client Results"
-    : protocolId  ? "Protocol Results"
-    : auditorId   ? "Auditor Results"
-    : memberId    ? "My Results"
+  const pageTitle = clientId  ? "Client Results"
+    : protocolId ? "Protocol Results"
+    : auditorId  ? "Auditor Results"
+    : memberId   ? "My Results"
     : "All Results";
 
   const hasActiveFilters = Object.values(filters).some((s) => s?.size > 0);
@@ -276,8 +279,7 @@ export default function ResultsPage() {
           )}
           <h1 className="text-2xl font-bold text-text-pri tracking-tight">{pageTitle}</h1>
           <p className="text-text-ter text-sm mt-0.5">
-            {loading
-              ? "Loading…"
+            {loading ? "Loading…"
               : `${totalElements.toLocaleString()} total session${totalElements !== 1 ? "s" : ""}${hasActiveFilters ? ` · ${filtered.length} shown (filtered)` : ""}`}
           </p>
         </div>
@@ -292,16 +294,13 @@ export default function ResultsPage() {
         </button>
       </header>
 
-      {/* Empty state */}
       {!loading && filtered.length === 0 ? (
         <div className="text-center py-20 bg-bg-primary rounded-xl border-2 border-dashed border-border-sec">
           <p className="text-text-ter font-medium">
             {totalElements === 0 ? "No sessions found." : "No sessions match the current column filters."}
           </p>
           {hasActiveFilters && (
-            <button onClick={() => setFilters({})} className="mt-3 text-sm text-lsg-blue hover:underline">
-              Clear column filters
-            </button>
+            <button onClick={() => setFilters({})} className="mt-3 text-sm text-lsg-blue hover:underline">Clear column filters</button>
           )}
         </div>
       ) : (
@@ -311,12 +310,15 @@ export default function ResultsPage() {
               <thead>
                 <tr className="border-b border-border-ter bg-bg-secondary/50">
 
-                  {/* Filterable columns — Date, Client, Protocol, LOB, Member Audited */}
+                  {/* Actions — first column, 40px */}
+                  <th className="w-10 px-2 py-3"><span className="sr-only">Actions</span></th>
+
+                  {/* Filterable columns */}
                   {[
-                    { key: "sessionDate",       label: "Date",     type: "date" },
-                    { key: "clientName",        label: "Client",   type: "text" },
-                    { key: "protocolName",      label: "Protocol", type: "text" },
-                    { key: "lobName",           label: "LOB",      type: "text" },
+                    { key: "sessionDate",  label: "Date",     type: "date" },
+                    { key: "clientName",   label: "Client",   type: "text" },
+                    { key: "protocolName", label: "Protocol", type: "text" },
+                    { key: "lobName",      label: "LOB",      type: "text" },
                   ].map(({ key, label, type }) => (
                     <th key={key} className="px-4 py-3 text-left whitespace-nowrap">
                       <ColumnFilter label={label} values={uniqueVals[key] ?? []}
@@ -325,21 +327,19 @@ export default function ResultsPage() {
                     </th>
                   ))}
 
-                  {/* Interaction ID — plain header, no filter (values are unique per session) */}
+                  {/* Interaction ID — plain, no filter */}
                   <th className="px-4 py-3 text-left whitespace-nowrap">
-                    <span className="text-[11px] font-bold text-text-sec uppercase tracking-wider">
-                      Interaction ID
-                    </span>
+                    <span className="text-[11px] font-bold text-text-sec uppercase tracking-wider">Interaction ID</span>
                   </th>
 
-                  {/* Member Audited — filterable */}
+                  {/* Member Audited */}
                   <th className="px-4 py-3 text-left whitespace-nowrap">
                     <ColumnFilter label="Member Audited" values={uniqueVals.memberAuditedName ?? []}
                       activeFilter={filters.memberAuditedName ?? new Set()}
                       onChange={(v) => setFilter("memberAuditedName", v)} type="text" />
                   </th>
 
-                  {/* Score columns */}
+                  {/* Scores */}
                   {[
                     { key: "customerScore",   label: "Customer"   },
                     { key: "businessScore",   label: "Business"   },
@@ -380,8 +380,6 @@ export default function ResultsPage() {
                       </th>
                     );
                   })}
-
-                  <th className="px-4 py-3"><span className="sr-only">Actions</span></th>
                 </tr>
               </thead>
               <tbody>
@@ -390,13 +388,19 @@ export default function ResultsPage() {
                     className={["border-b border-border-ter transition-colors hover:bg-bg-secondary/40",
                       loading ? "opacity-50" : "",
                       idx % 2 === 0 ? "" : "bg-bg-secondary/20"].join(" ")}>
+
+                    {/* Actions — first */}
+                    <td className="w-10 px-2 py-3 text-center">
+                      <KebabMenu sessionId={row.sessionId} navigate={navigate} />
+                    </td>
+
                     <td className="px-4 py-3 text-xs text-text-ter whitespace-nowrap tabular-nums">
                       {row.sessionDate ? new Date(row.sessionDate).toLocaleDateString() : "—"}
                     </td>
                     <td className="px-4 py-3 text-xs text-text-pri whitespace-nowrap">{row.clientName ?? "—"}</td>
                     <td className="px-4 py-3 text-xs text-text-pri whitespace-nowrap max-w-[160px] truncate" title={row.protocolName}>{row.protocolName ?? "—"}</td>
                     <td className="px-4 py-3 text-xs text-text-pri whitespace-nowrap">{row.lobName ?? "—"}</td>
-                    <td className="px-4 py-3 text-xs text-text-ter whitespace-nowrap font-mono">{row.interactionId ?? "—"}</td>
+                    <td className="px-4 py-3 text-xs text-text-ter font-mono whitespace-nowrap">{row.interactionId ?? "—"}</td>
                     <td className="px-4 py-3 text-xs text-text-pri whitespace-nowrap">{row.memberAuditedName ?? "—"}</td>
                     <td className="px-4 py-3 text-center"><ScorePill score={row.customerScore} /></td>
                     <td className="px-4 py-3 text-center"><ScorePill score={row.businessScore} /></td>
@@ -411,21 +415,13 @@ export default function ResultsPage() {
                         </td>
                       );
                     })}
-
-                    <td className="px-4 py-3">
-                      <KebabMenu sessionId={row.sessionId} navigate={navigate} />
-                    </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
 
-          <Pagination
-            currentPage={currentPage}
-            totalPages={totalPages}
-            onPageChange={handlePageChange}
-          />
+          <Pagination currentPage={currentPage} totalPages={totalPages} onPageChange={handlePageChange} />
 
           {totalPages > 1 && (
             <p className="text-center text-xs text-text-ter -mt-2 pb-2">

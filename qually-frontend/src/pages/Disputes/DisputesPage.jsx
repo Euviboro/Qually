@@ -1,29 +1,26 @@
 /**
  * @module pages/Disputes/DisputesPage
  *
- * Role-aware disputes inbox. Replaces the old DisputeInboxPage which showed
- * only DISPUTED sessions and had no filtering or pagination.
- *
- * Data source: GET /api/disputes/inbox — returns flat response-level rows
- * scoped by the current user's role (see DisputeService.getInbox).
- *
- * Reuses ColumnFilter and Pagination from the Results table for consistency.
- * Columns: Date, Client, Protocol, LOB, Interaction ID, Member Audited,
- *          Question (truncated), Status.
+ * Changes in this version:
+ * - Kebab menu column moved to first position, width 40px (w-10)
+ * - Column order: [Actions] · Date · Client · Protocol · LOB · Interaction ID ·
+ *   Member Audited · Question · Status
+ * - KebabMenu uses createPortal for fixed-position dropdown anchored to click point
  */
 
 import { useState, useMemo, useCallback, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import { createPortal } from "react-dom";
 import { useAsync } from "../../hooks/useAsync";
 import { getDisputeInbox } from "../../api/disputes";
 import { ColumnFilter } from "../../components/ui/ColumnFilter";
 import { Pagination } from "../../components/ui/Pagination";
 
-const PAGE_SIZE      = 100;
-const MAX_Q_LEN      = 40;
+const PAGE_SIZE = 100;
+const MAX_Q_LEN = 40;
 const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 
-// ── Display status badge ──────────────────────────────────────
+// ── Status badge ──────────────────────────────────────────────
 
 const STATUS_META = {
   FLAGGED:  { label: "Flagged",  cls: "bg-warning-surface text-warning-text"  },
@@ -41,30 +38,45 @@ function StatusBadge({ status }) {
   );
 }
 
-// ── Kebab menu ────────────────────────────────────────────────
+// ── Kebab menu — portal-based, anchored to click point ────────
 
 function KebabMenu({ sessionId, navigate }) {
   const [open, setOpen] = useState(false);
-  const ref = useRef(null);
+  const [pos, setPos] = useState({ top: 0, left: 0 });
+  const btnRef  = useRef(null);
+  const menuRef = useRef(null);
+
+  const handleOpen = () => {
+    const rect = btnRef.current.getBoundingClientRect();
+    setPos({ top: rect.bottom + window.scrollY + 4, left: rect.left });
+    setOpen(true);
+  };
 
   useEffect(() => {
+    if (!open) return;
     const handler = (e) => {
-      if (ref.current && !ref.current.contains(e.target)) setOpen(false);
+      if (menuRef.current && !menuRef.current.contains(e.target) &&
+          btnRef.current  && !btnRef.current.contains(e.target)) {
+        setOpen(false);
+      }
     };
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
-  }, []);
+  }, [open]);
 
   return (
-    <div ref={ref} className="relative inline-block">
-      <button onClick={() => setOpen((v) => !v)}
+    <>
+      <button ref={btnRef} onClick={handleOpen}
         className="p-1.5 rounded-md text-text-ter hover:text-text-pri hover:bg-bg-tertiary transition-colors">
         <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
           <circle cx="8" cy="3" r="1.5"/><circle cx="8" cy="8" r="1.5"/><circle cx="8" cy="13" r="1.5"/>
         </svg>
       </button>
-      {open && (
-        <div className="absolute right-0 top-full mt-1 z-50 bg-bg-primary border border-border-sec rounded-lg shadow-lg w-48 py-1">
+
+      {open && createPortal(
+        <div ref={menuRef}
+          style={{ position: "fixed", top: pos.top, left: pos.left, zIndex: 9999 }}
+          className="bg-bg-primary border border-border-sec rounded-lg shadow-lg w-48 py-1">
           <button
             onClick={() => { navigate(`/sessions/${sessionId}`); setOpen(false); }}
             className="w-full text-left px-4 py-2 text-sm text-text-sec hover:bg-bg-secondary transition-colors flex items-center gap-2"
@@ -75,9 +87,10 @@ function KebabMenu({ sessionId, navigate }) {
             </svg>
             View Session Results
           </button>
-        </div>
+        </div>,
+        document.body
       )}
-    </div>
+    </>
   );
 }
 
@@ -108,22 +121,18 @@ export default function DisputesPage() {
     };
   }, [rows]);
 
-  const filtered = useMemo(() => {
-    return rows.filter((r) => {
-      for (const [col, set] of Object.entries(filters)) {
-        if (!set || set.size === 0) continue;
-        if (col === "sessionDate") {
-          const dayStr = r.sessionDate
-            ? new Date(r.sessionDate).toISOString().slice(0, 10)
-            : null;
-          if (!dayStr || !set.has(dayStr)) return false;
-        } else {
-          if (!set.has(r[col])) return false;
-        }
+  const filtered = useMemo(() => rows.filter((r) => {
+    for (const [col, set] of Object.entries(filters)) {
+      if (!set || set.size === 0) continue;
+      if (col === "sessionDate") {
+        const dayStr = r.sessionDate ? new Date(r.sessionDate).toISOString().slice(0, 10) : null;
+        if (!dayStr || !set.has(dayStr)) return false;
+      } else {
+        if (!set.has(r[col])) return false;
       }
-      return true;
-    });
-  }, [rows, filters]);
+    }
+    return true;
+  }), [rows, filters]);
 
   // ── Pagination ─────────────────────────────────────────────
   const [currentPage, setCurrentPage] = useState(0);
@@ -135,7 +144,6 @@ export default function DisputesPage() {
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
-  // Reset to page 0 when filters change
   useEffect(() => { setCurrentPage(0); }, [filters]);
 
   const hasActiveFilters = Object.values(filters).some((s) => s?.size > 0);
@@ -179,11 +187,16 @@ export default function DisputesPage() {
             <table className="min-w-full text-sm border-collapse">
               <thead>
                 <tr className="border-b border-border-ter bg-bg-secondary/50">
+
+                  {/* Actions — first column, 40px */}
+                  <th className="w-10 px-2 py-3"><span className="sr-only">Actions</span></th>
+
+                  {/* Filterable columns */}
                   {[
-                    { key: "sessionDate",       label: "Date",     type: "date" },
-                    { key: "clientName",        label: "Client",   type: "text" },
-                    { key: "protocolName",      label: "Protocol", type: "text" },
-                    { key: "lobName",           label: "LOB",      type: "text" },
+                    { key: "sessionDate",  label: "Date",     type: "date" },
+                    { key: "clientName",   label: "Client",   type: "text" },
+                    { key: "protocolName", label: "Protocol", type: "text" },
+                    { key: "lobName",      label: "LOB",      type: "text" },
                   ].map(({ key, label, type }) => (
                     <th key={key} className="px-4 py-3 text-left whitespace-nowrap">
                       <ColumnFilter label={label} values={uniqueVals[key] ?? []}
@@ -194,9 +207,7 @@ export default function DisputesPage() {
 
                   {/* Interaction ID — plain, no filter */}
                   <th className="px-4 py-3 text-left whitespace-nowrap">
-                    <span className="text-[11px] font-bold text-text-sec uppercase tracking-wider">
-                      Interaction ID
-                    </span>
+                    <span className="text-[11px] font-bold text-text-sec uppercase tracking-wider">Interaction ID</span>
                   </th>
 
                   {/* Member Audited */}
@@ -206,11 +217,9 @@ export default function DisputesPage() {
                       onChange={(v) => setFilter("memberAuditedName", v)} type="text" />
                   </th>
 
-                  {/* Question — plain, no filter (too many unique values) */}
+                  {/* Question — plain, no filter */}
                   <th className="px-4 py-3 text-left" style={{ minWidth: 200, maxWidth: 300 }}>
-                    <span className="text-[11px] font-bold text-text-sec uppercase tracking-wider">
-                      Question
-                    </span>
+                    <span className="text-[11px] font-bold text-text-sec uppercase tracking-wider">Question</span>
                   </th>
 
                   {/* Status */}
@@ -219,8 +228,6 @@ export default function DisputesPage() {
                       activeFilter={filters.displayStatus ?? new Set()}
                       onChange={(v) => setFilter("displayStatus", v)} />
                   </th>
-
-                  <th className="px-4 py-3"><span className="sr-only">Actions</span></th>
                 </tr>
               </thead>
               <tbody>
@@ -237,13 +244,18 @@ export default function DisputesPage() {
                     <tr key={`${row.sessionId}-${row.responseId}`}
                       className={["border-b border-border-ter transition-colors hover:bg-bg-secondary/40",
                         idx % 2 === 0 ? "" : "bg-bg-secondary/20"].join(" ")}>
+
+                      {/* Actions — first */}
+                      <td className="w-10 px-2 py-3 text-center">
+                        <KebabMenu sessionId={row.sessionId} navigate={navigate} />
+                      </td>
+
                       <td className="px-4 py-3 text-xs text-text-ter whitespace-nowrap tabular-nums">{dateStr}</td>
                       <td className="px-4 py-3 text-xs text-text-pri whitespace-nowrap">{row.clientName ?? "—"}</td>
                       <td className="px-4 py-3 text-xs text-text-pri whitespace-nowrap max-w-[140px] truncate" title={row.protocolName}>{row.protocolName ?? "—"}</td>
                       <td className="px-4 py-3 text-xs text-text-pri whitespace-nowrap">{row.lobName ?? "—"}</td>
                       <td className="px-4 py-3 text-xs text-text-ter font-mono whitespace-nowrap">
-                        {row.interactionId && !row.interactionId.startsWith("DRAFT-")
-                          ? row.interactionId : "—"}
+                        {row.interactionId && !row.interactionId.startsWith("DRAFT-") ? row.interactionId : "—"}
                       </td>
                       <td className="px-4 py-3 text-xs text-text-pri whitespace-nowrap">{row.memberAuditedName ?? "—"}</td>
                       <td className="px-4 py-3 text-xs text-text-sec max-w-[300px]" title={row.questionText}>
@@ -255,9 +267,6 @@ export default function DisputesPage() {
                       <td className="px-4 py-3">
                         <StatusBadge status={row.displayStatus} />
                       </td>
-                      <td className="px-4 py-3">
-                        <KebabMenu sessionId={row.sessionId} navigate={navigate} />
-                      </td>
                     </tr>
                   );
                 })}
@@ -265,11 +274,7 @@ export default function DisputesPage() {
             </table>
           </div>
 
-          <Pagination
-            currentPage={currentPage}
-            totalPages={totalPages}
-            onPageChange={handlePageChange}
-          />
+          <Pagination currentPage={currentPage} totalPages={totalPages} onPageChange={handlePageChange} />
 
           {totalPages > 1 && (
             <p className="text-center text-xs text-text-ter -mt-2 pb-2">
