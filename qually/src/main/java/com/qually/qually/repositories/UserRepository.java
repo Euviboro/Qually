@@ -43,4 +43,15 @@ public interface UserRepository extends JpaRepository<User, Integer> {
     List<User> findByManager_UserId(Integer managerId);
 
     List<User> findByFullNameContainingIgnoreCase(String fullName);
+
+    @Query(value = """
+    WITH RECURSIVE subordinates AS (
+        SELECT user_id FROM users WHERE manager_id = :userId
+        UNION ALL
+        SELECT u.user_id FROM users u
+        JOIN subordinates s ON u.manager_id = s.user_id
+    )
+    SELECT user_id FROM subordinates
+    """, nativeQuery = true)
+    List<Integer> findAllSubordinateIds(@Param("userId") Integer userId);
 }

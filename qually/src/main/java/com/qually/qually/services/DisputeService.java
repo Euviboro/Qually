@@ -19,6 +19,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Stream;
 
@@ -54,20 +55,21 @@ public class DisputeService {
     // ── Inbox ─────────────────────────────────────────────────
 
     /**
-     * Returns the disputes inbox for the given user, scoped by their role.
+     * Returns the disputes inbox for the given user, scoped by role and full
+     * management chain visibility.
      *
      * <p><strong>Visibility tiers:</strong></p>
      * <ul>
-     *   <li><strong>OPERATIONS Team Member</strong> ({@code canRaiseDispute = false}) —
-     *       responses in sessions where they are the member audited, that are
-     *       flagged, disputed, or resolved.</li>
-     *   <li><strong>OPERATIONS Team Leader+</strong> ({@code canRaiseDispute = true}) —
-     *       same but for all direct reports (members whose {@code manager_id} is
-     *       this user), scoped to the user's assigned clients.</li>
+     *   <li><strong>Team Member</strong> ({@code canRaiseDispute = false}) —
+     *       responses from sessions where they are the member audited, that
+     *       are flagged, disputed, or resolved.</li>
+     *   <li><strong>OPERATIONS TL+</strong> ({@code canRaiseDispute = true}) —
+     *       same but for every user in their full management chain (not just
+     *       direct reports), scoped to their assigned clients. Uses a recursive
+     *       CTE to collect all subordinate IDs at any depth.</li>
      *   <li><strong>QA</strong> — disputed and resolved responses from sessions
-     *       they personally audited. QA users who have subordinate QA auditors
-     *       (their userId appears as manager_id for another QA user) also see
-     *       those subordinates' audited sessions.</li>
+     *       audited by the user themselves or anyone in their QA management
+     *       chain. Also uses the recursive CTE.</li>
      * </ul>
      */
     @Transactional(readOnly = true)
@@ -78,25 +80,45 @@ public class DisputeService {
         List<AuditResponse> responses;
 
         if (Department.QA.equals(dept)) {
-            // Collect this user's ID plus any QA subordinates' IDs
+            // Collect own ID plus every QA subordinate at any depth
+            List<Integer> subordinateIds = userRepository.findAllSubordinateIds(userId);
             List<Integer> auditorIds = Stream.concat(
                     Stream.of(userId),
-                    userRepository.findByManager_UserId(userId).stream()
-                            .filter(u -> Department.QA.equals(getDepartment(u)))
+                    subordinateIds.stream()
+                            .map(id -> userRepository.findById(id).orElse(null))
+                            .filter(u -> u != null && Department.QA.equals(getDepartment(u)))
                             .map(User::getUserId)
-            ).toList();
+            ).distinct().toList();
 
+            log.debug("QA inbox for user {} — {} auditor IDs in chain", userId, auditorIds.size());
             responses = auditResponseRepository.findInboxByAuditors(auditorIds);
 
-        } else if (Boolean.TRUE.equals(user.getRole() != null
-                ? user.getRole().getCanRaiseDispute() : false)) {
-            // OPERATIONS TL+ — direct reports in their assigned clients
+        } else if (Boolean.TRUE.equals(
+                user.getRole() != null ? user.getRole().getCanRaiseDispute() : false)) {
+
+            // OPERATIONS TL+ — full subordinate chain scoped to assigned clients
+            List<Integer> allSubordinateIds = userRepository.findAllSubordinateIds(userId);
+
+            if (allSubordinateIds.isEmpty()) {
+                log.debug("OPERATIONS TL+ inbox for user {} — no subordinates found", userId);
+                return List.of();
+            }
+
             List<Integer> clientIds = user.getClients().stream()
-                    .map(Client::getClientId).toList();
-            responses = auditResponseRepository.findInboxByManagedMembers(userId, clientIds);
+                    .map(Client::getClientId)
+                    .toList();
+
+            if (clientIds.isEmpty()) {
+                log.warn("OPERATIONS TL+ user {} has no client assignments — returning empty inbox", userId);
+                return List.of();
+            }
+
+            log.debug("OPERATIONS TL+ inbox for user {} — {} subordinates, {} clients",
+                    userId, allSubordinateIds.size(), clientIds.size());
+            responses = auditResponseRepository.findInboxByMemberIds(allSubordinateIds, clientIds);
 
         } else {
-            // OPERATIONS Team Member — own audited sessions
+            // Team Member — own audited sessions only
             responses = auditResponseRepository.findInboxByMemberAudited(userId);
         }
 

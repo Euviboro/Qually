@@ -29,7 +29,7 @@ public interface AuditResponseRepository extends JpaRepository<AuditResponse, Lo
 
     /**
      * Deletes all responses for a session before re-saving updated answers.
-     * Safe only for DRAFT sessions — disputes can only be raised on COMPLETED.
+     * Safe only for DRAFT sessions.
      */
     void deleteByAuditSession_SessionId(Long sessionId);
 
@@ -37,8 +37,8 @@ public interface AuditResponseRepository extends JpaRepository<AuditResponse, Lo
 
     /**
      * Responses where the given user is the member audited and the response
-     * is either flagged or in a formal dispute lifecycle state.
-     * Used for the Team Member visibility tier in the Disputes inbox.
+     * is flagged or in a formal dispute lifecycle state.
+     * Used for the Team Member visibility tier.
      */
     @Query("""
         SELECT r FROM AuditResponse r
@@ -61,9 +61,17 @@ public interface AuditResponseRepository extends JpaRepository<AuditResponse, Lo
     List<AuditResponse> findInboxByMemberAudited(@Param("userId") Integer userId);
 
     /**
-     * Responses where the member audited is a direct report of the given user,
-     * scoped to the user's assigned clients.
-     * Used for the Team Leader+ visibility tier in the Disputes inbox.
+     * Responses where the member audited is anywhere in the management chain
+     * below the given user, scoped to the user's assigned clients.
+     *
+     * <p>Previously filtered by {@code manager_id = :managerId} (one level
+     * deep). Now accepts a pre-computed list of all subordinate user IDs from
+     * the recursive CTE in {@code UserRepository.findAllSubordinateIds}, so
+     * visibility extends to the full management chain at any depth.</p>
+     *
+     * <p>Client scoping ensures an Account Manager at Client A cannot see
+     * disputes for team members at Client B even if a subordinate manages
+     * that client.</p>
      */
     @Query("""
         SELECT r FROM AuditResponse r
@@ -76,7 +84,7 @@ public interface AuditResponseRepository extends JpaRepository<AuditResponse, Lo
         LEFT JOIN FETCH r.dispute d
         LEFT JOIN FETCH d.reason
         LEFT JOIN FETCH d.raisedBy
-        WHERE m.manager.userId = :managerId
+        WHERE m.userId IN :memberIds
           AND c.clientId IN :clientIds
           AND (r.isFlagged = true
                OR r.responseStatus IN (
@@ -84,13 +92,17 @@ public interface AuditResponseRepository extends JpaRepository<AuditResponse, Lo
                    com.qually.qually.models.enums.ResponseStatus.RESOLVED))
         ORDER BY s.startedAt DESC
     """)
-    List<AuditResponse> findInboxByManagedMembers(
-            @Param("managerId") Integer managerId,
+    List<AuditResponse> findInboxByMemberIds(
+            @Param("memberIds") List<Integer> memberIds,
             @Param("clientIds") List<Integer> clientIds);
 
     /**
-     * Disputed and resolved responses for sessions audited by any of the given
-     * auditor IDs. Used for the QA visibility tier in the Disputes inbox.
+     * Disputed and resolved responses for sessions audited by any of the
+     * given auditor IDs. Used for the QA visibility tier.
+     *
+     * <p>The caller passes their own ID plus all subordinate QA auditor IDs
+     * from the recursive CTE, so a QA Director sees disputes from every
+     * session audited anywhere in their management chain.</p>
      */
     @Query("""
         SELECT r FROM AuditResponse r
