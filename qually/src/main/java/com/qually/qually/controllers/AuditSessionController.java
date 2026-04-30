@@ -6,9 +6,9 @@ import com.qually.qually.dto.response.AuditSessionResponseDTO;
 import com.qually.qually.dto.response.SessionResultsResponseDTO;
 import com.qually.qually.dto.response.SessionResumeDTO;
 import com.qually.qually.services.AuditSessionService;
-import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -32,10 +32,9 @@ public class AuditSessionController {
     @GetMapping
     public ResponseEntity<List<AuditSessionResponseDTO>> getAllSessions(
             @RequestParam(required = false) Integer auditorUserId,
-            @RequestParam(required = false) String auditStatus,
-            HttpServletRequest req) {
+            @RequestParam(required = false) String auditStatus) {
         return ResponseEntity.ok(auditSessionService.getAllSessions(
-                auditorUserId, auditStatus, currentUserIdOrNull(req)));
+                auditorUserId, auditStatus, currentUserIdOrNull()));
     }
 
     @GetMapping("/{id}")
@@ -48,13 +47,6 @@ public class AuditSessionController {
         return ResponseEntity.ok(auditSessionService.getSessionResults(id));
     }
 
-    /**
-     * Returns the minimal payload needed to resume a DRAFT session in the
-     * Log Session form: metadata fields + previously recorded answers with
-     * subattribute selections.
-     *
-     * <p>Only DRAFT sessions can be resumed — returns 403 for any other status.</p>
-     */
     @GetMapping("/{id}/resume")
     public ResponseEntity<SessionResumeDTO> getSessionForResume(@PathVariable Long id) {
         return ResponseEntity.ok(auditSessionService.getSessionForResume(id));
@@ -69,9 +61,23 @@ public class AuditSessionController {
 
     // ── Helpers ───────────────────────────────────────────────
 
-    private Integer currentUserIdOrNull(HttpServletRequest req) {
-        String header = req.getHeader("X-User-Id");
-        if (header == null || header.isBlank()) return null;
-        try { return Integer.parseInt(header); } catch (NumberFormatException e) { return null; }
+    private Integer currentUserId() {
+        return (Integer) SecurityContextHolder
+                .getContext()
+                .getAuthentication()
+                .getPrincipal();
+    }
+
+    /**
+     * Returns the current user's ID or null if unauthenticated.
+     * Used by {@code getAllSessions} which applies optional visibility
+     * scoping for OPERATIONS users but still works when called without auth
+     * in test contexts.
+     */
+    private Integer currentUserIdOrNull() {
+        var auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth == null || !auth.isAuthenticated()) return null;
+        Object principal = auth.getPrincipal();
+        return (principal instanceof Integer) ? (Integer) principal : null;
     }
 }

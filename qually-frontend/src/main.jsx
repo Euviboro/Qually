@@ -17,19 +17,33 @@ const ResultsPage        = lazy(() => import("./pages/Results/ResultsPage"));
 const DisputesPage       = lazy(() => import("./pages/Disputes/DisputesPage"));
 const SettingsPage       = lazy(() => import("./pages/Settings/SettingsPage"));
 const LoginPage          = lazy(() => import("./pages/Login/LoginPage"));
+const ChangePinPage      = lazy(() => import("./pages/ChangePin/ChangePinPage"));
 
+/** Redirects to /login when no user is in context. */
 function RequireAuth({ children }) {
   const { user } = useAuth();
   if (!user) return <Navigate to="/login" replace />;
   return children;
 }
 
+/**
+ * Redirects to /change-pin when the user has a forced PIN change pending.
+ * Prevents accessing the app before the PIN is changed.
+ */
+function RequirePinChanged({ children }) {
+  const { user } = useAuth();
+  if (user?.forcePinChange) return <Navigate to="/change-pin" replace />;
+  return children;
+}
+
+/** Redirects non-QA users away from QA-only routes. */
 function RequireQA({ children }) {
   const { isQA } = useAuth();
   if (!isQA) return <Navigate to="/results" replace />;
   return children;
 }
 
+/** QA → Dashboard, OPERATIONS → /results */
 function IndexRedirect() {
   const { isQA } = useAuth();
   return isQA ? <DashboardPage /> : <Navigate to="/results" replace />;
@@ -41,10 +55,20 @@ const router = createBrowserRouter([
     element: <Suspense fallback={<PageSpinner />}><LoginPage /></Suspense>,
   },
   {
+    path: "/change-pin",
+    element: (
+      <RequireAuth>
+        <Suspense fallback={<PageSpinner />}><ChangePinPage /></Suspense>
+      </RequireAuth>
+    ),
+  },
+  {
     path: "/",
     element: (
       <RequireAuth>
-        <ErrorBoundary><AppShell /></ErrorBoundary>
+        <RequirePinChanged>
+          <ErrorBoundary><AppShell /></ErrorBoundary>
+        </RequirePinChanged>
       </RequireAuth>
     ),
     children: [

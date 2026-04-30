@@ -2,8 +2,12 @@
  * @module pages/Settings/SettingsPage
  *
  * User management page, accessible only to QA department users.
- * Lists all users (active and inactive) with create, edit, and
- * deactivate/reactivate actions.
+ * Lists all users (active and inactive) with create, edit,
+ * deactivate/reactivate, and Reset PIN actions.
+ *
+ * Reset PIN generates a random 6-digit PIN, sets force_pin_change = true,
+ * and shows the plain PIN once in a modal. The admin must share it with
+ * the user securely.
  */
 
 import { useState, useEffect } from "react";
@@ -11,24 +15,24 @@ import { getUsers, createUser, updateUser, deactivateUser, reactivateUser } from
 import { SearchableSelect } from "../../components/ui/SearchableSelect";
 import { api } from "../../api/apiClient";
 
-// Fetch roles for the role selector
-const getRoles = () => api.get("/roles");
+const getRoles   = () => api.get("/roles");
 const getClients = () => api.get("/clients");
+const resetPin   = (userId) => api.put(`/users/${userId}/reset-pin`);
 
 // ── User Form Modal ───────────────────────────────────────────
 
 function UserFormModal({ user, roles, clients, onClose, onSaved }) {
   const isEdit = !!user;
   const [form, setForm] = useState({
-    userEmail:  user?.userEmail  ?? "",
-    fullName:   user?.fullName   ?? "",
-    roleId:     user?.roleId     ?? null,
-    managerId:  user?.managerId  ?? null,
-    clientIds:  user?.clientIds  ?? [],
+    userEmail: user?.userEmail ?? "",
+    fullName:  user?.fullName  ?? "",
+    roleId:    user?.roleId    ?? null,
+    managerId: user?.managerId ?? null,
+    clientIds: user?.clientIds ?? [],
   });
-  const [saving, setSaving] = useState(false);
-  const [error,  setError]  = useState(null);
-  const [allUsers, setAllUsers] = useState([]);
+  const [saving,    setSaving]   = useState(false);
+  const [error,     setError]    = useState(null);
+  const [allUsers,  setAllUsers] = useState([]);
 
   useEffect(() => {
     getUsers({ activeOnly: true }).then(setAllUsers).catch(() => {});
@@ -47,14 +51,27 @@ function UserFormModal({ user, roles, clients, onClose, onSaved }) {
 
   const handleSubmit = async () => {
     if (!form.fullName.trim() || !form.userEmail.trim() || !form.roleId) {
-      setError("Name, email and role are required."); return;
+      setError("Name, email and role are required.");
+      return;
     }
-    setSaving(true); setError(null);
+    setSaving(true);
+    setError(null);
     try {
       if (isEdit) {
-        await updateUser(user.userId, { fullName: form.fullName, roleId: form.roleId, managerId: form.managerId, clientIds: form.clientIds });
+        await updateUser(user.userId, {
+          fullName:  form.fullName,
+          roleId:    form.roleId,
+          managerId: form.managerId,
+          clientIds: form.clientIds,
+        });
       } else {
-        await createUser({ userEmail: form.userEmail, fullName: form.fullName, roleId: form.roleId, managerId: form.managerId, clientIds: form.clientIds });
+        await createUser({
+          userEmail: form.userEmail,
+          fullName:  form.fullName,
+          roleId:    form.roleId,
+          managerId: form.managerId,
+          clientIds: form.clientIds,
+        });
       }
       onSaved();
       onClose();
@@ -65,8 +82,10 @@ function UserFormModal({ user, roles, clients, onClose, onSaved }) {
     }
   };
 
-  const roleOptions   = roles.map((r)   => ({ value: r.roleId,   label: `${r.roleName} (${r.department})` }));
-  const managerOptions= allUsers.filter((u) => u.userId !== user?.userId).map((u) => ({ value: u.userId, label: `${u.fullName} — ${u.roleName ?? ""}` }));
+  const roleOptions    = roles.map((r) => ({ value: r.roleId, label: `${r.roleName} (${r.department})` }));
+  const managerOptions = allUsers
+    .filter((u) => u.userId !== user?.userId)
+    .map((u) => ({ value: u.userId, label: `${u.fullName} — ${u.roleName ?? ""}` }));
 
   return (
     <div onClick={onClose} className="fixed inset-0 z-[500] flex items-center justify-center p-4 bg-[rgba(0,20,50,0.4)] backdrop-blur-[2px]">
@@ -79,7 +98,6 @@ function UserFormModal({ user, roles, clients, onClose, onSaved }) {
         </div>
 
         <div className="flex flex-col gap-4">
-          {/* Email — only on create */}
           {!isEdit && (
             <div>
               <label className="block text-xs font-bold text-text-sec uppercase tracking-wider mb-1.5">Email <span className="text-lsg-blue">*</span></label>
@@ -106,7 +124,6 @@ function UserFormModal({ user, roles, clients, onClose, onSaved }) {
             <SearchableSelect options={managerOptions} value={form.managerId} onChange={(v) => set("managerId", v)} placeholder="Select manager…" emptyMessage="No users found" />
           </div>
 
-          {/* Client assignment */}
           <div>
             <label className="block text-xs font-bold text-text-sec uppercase tracking-wider mb-2">Client Access <span className="text-text-ter font-normal">(optional)</span></label>
             <div className="flex flex-wrap gap-2">
@@ -139,6 +156,82 @@ function UserFormModal({ user, roles, clients, onClose, onSaved }) {
   );
 }
 
+// ── Reset PIN Modal ───────────────────────────────────────────
+
+/**
+ * Shows the generated PIN once after a successful reset.
+ * The admin must copy and share it — it will not be shown again.
+ */
+function ResetPinModal({ user, onClose }) {
+  const [pin,     setPin]     = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error,   setError]   = useState(null);
+  const [copied,  setCopied]  = useState(false);
+
+  useEffect(() => {
+    resetPin(user.userId)
+      .then((data) => setPin(data.pin))
+      .catch((err) => setError(err.message))
+      .finally(() => setLoading(false));
+  }, [user.userId]);
+
+  const handleCopy = () => {
+    if (!pin) return;
+    navigator.clipboard.writeText(pin).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  };
+
+  return (
+    <div onClick={onClose} className="fixed inset-0 z-[600] flex items-center justify-center p-4 bg-[rgba(0,20,50,0.4)] backdrop-blur-[2px]">
+      <div onClick={(e) => e.stopPropagation()} className="w-full max-w-sm bg-bg-primary rounded-xl border border-border-sec shadow-lg p-7 flex flex-col gap-5 text-center">
+
+        <div>
+          <h2 className="text-lg font-bold text-text-pri">PIN Reset</h2>
+          <p className="text-sm text-text-ter mt-1">
+            {user.fullName}'s temporary PIN is shown below.
+          </p>
+        </div>
+
+        {loading && (
+          <div className="flex items-center justify-center gap-2 text-text-ter py-4">
+            <div className="w-5 h-5 border-2 border-border-sec border-t-lsg-blue rounded-full animate-spin" />
+            Generating PIN…
+          </div>
+        )}
+
+        {error && (
+          <p className="text-xs text-error-on bg-error-surface px-3 py-2 rounded-lg">{error}</p>
+        )}
+
+        {pin && (
+          <>
+            <div className="bg-bg-secondary rounded-xl p-5 border border-border-sec">
+              <p className="text-3xl font-bold font-mono tracking-widest text-text-pri">{pin}</p>
+            </div>
+
+            <p className="text-xs text-warning-text bg-warning-surface px-3 py-2 rounded-lg">
+              This PIN will not be shown again. Copy it and share it with the user securely.
+              They will be required to change it on their next login.
+            </p>
+
+            <button onClick={handleCopy}
+              className={["w-full py-2.5 text-sm font-bold rounded-md transition-colors",
+                copied ? "bg-success-surface text-success-on" : "bg-lsg-blue text-white hover:bg-lsg-blue-dark"].join(" ")}>
+              {copied ? "✓ Copied!" : "Copy PIN"}
+            </button>
+          </>
+        )}
+
+        <button onClick={onClose} className="text-sm text-text-ter hover:text-text-sec transition-colors">
+          Close
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // ── Page ──────────────────────────────────────────────────────
 
 export default function SettingsPage() {
@@ -146,27 +239,38 @@ export default function SettingsPage() {
   const [roles,   setRoles]   = useState([]);
   const [clients, setClients] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [editTarget, setEditTarget] = useState(null); // null = closed, {} = create, user = edit
-  const [confirmDeactivate, setConfirmDeactivate] = useState(null);
+
+  const [editTarget,         setEditTarget]         = useState(null);
+  const [confirmDeactivate,  setConfirmDeactivate]  = useState(null);
+  const [resetPinTarget,     setResetPinTarget]     = useState(null);
 
   const load = async () => {
     setLoading(true);
     try {
       const [u, r, c] = await Promise.all([getUsers(), getRoles(), getClients()]);
-      setUsers(u); setRoles(r); setClients(c);
-    } catch {} finally { setLoading(false); }
+      setUsers(u);
+      setRoles(r);
+      setClients(c);
+    } catch {
+      // errors surfaced per-request
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => { load(); }, []);
 
   const handleDeactivate = async (userId) => {
-    await deactivateUser(userId); load(); setConfirmDeactivate(null);
+    await deactivateUser(userId);
+    load();
+    setConfirmDeactivate(null);
   };
   const handleReactivate = async (userId) => {
-    await reactivateUser(userId); load();
+    await reactivateUser(userId);
+    load();
   };
 
-  const activeUsers   = users.filter((u) => u.isActive);
+  const activeUsers   = users.filter((u) =>  u.isActive);
   const inactiveUsers = users.filter((u) => !u.isActive);
 
   return (
@@ -190,14 +294,25 @@ export default function SettingsPage() {
         </div>
       ) : (
         <>
-          {/* Active users */}
-          <UserTable users={activeUsers} onEdit={setEditTarget} onDeactivate={setConfirmDeactivate} onReactivate={handleReactivate} />
+          <UserTable
+            users={activeUsers}
+            onEdit={setEditTarget}
+            onDeactivate={setConfirmDeactivate}
+            onReactivate={handleReactivate}
+            onResetPin={setResetPinTarget}
+          />
 
-          {/* Inactive users */}
           {inactiveUsers.length > 0 && (
             <div className="mt-8">
               <p className="text-[10px] font-bold text-text-ter uppercase tracking-widest mb-3">Inactive Users</p>
-              <UserTable users={inactiveUsers} onEdit={setEditTarget} onDeactivate={setConfirmDeactivate} onReactivate={handleReactivate} inactive />
+              <UserTable
+                users={inactiveUsers}
+                onEdit={setEditTarget}
+                onDeactivate={setConfirmDeactivate}
+                onReactivate={handleReactivate}
+                onResetPin={setResetPinTarget}
+                inactive
+              />
             </div>
           )}
         </>
@@ -219,7 +334,9 @@ export default function SettingsPage() {
         <div onClick={() => setConfirmDeactivate(null)} className="fixed inset-0 z-[600] flex items-center justify-center p-4 bg-[rgba(0,20,50,0.4)] backdrop-blur-[2px]">
           <div onClick={(e) => e.stopPropagation()} className="w-full max-w-sm bg-bg-primary rounded-xl border border-border-sec shadow-lg p-7 flex flex-col gap-5">
             <h2 className="text-lg font-bold text-text-pri">Deactivate User?</h2>
-            <p className="text-sm text-text-sec">{confirmDeactivate.fullName} will be hidden from all dropdowns but their historical records will be preserved.</p>
+            <p className="text-sm text-text-sec">
+              {confirmDeactivate.fullName} will be hidden from all dropdowns but their historical records will be preserved.
+            </p>
             <div className="flex justify-end gap-3">
               <button onClick={() => setConfirmDeactivate(null)} className="px-4 py-2 text-sm font-medium text-text-sec border border-border-sec rounded-md hover:bg-bg-secondary transition-colors">Cancel</button>
               <button onClick={() => handleDeactivate(confirmDeactivate.userId)} className="px-5 py-2 text-sm font-bold text-white bg-error-on hover:opacity-90 rounded-md transition-colors">Deactivate</button>
@@ -227,11 +344,21 @@ export default function SettingsPage() {
           </div>
         </div>
       )}
+
+      {/* Reset PIN modal */}
+      {resetPinTarget && (
+        <ResetPinModal
+          user={resetPinTarget}
+          onClose={() => setResetPinTarget(null)}
+        />
+      )}
     </div>
   );
 }
 
-function UserTable({ users, onEdit, onDeactivate, onReactivate, inactive = false }) {
+// ── UserTable ─────────────────────────────────────────────────
+
+function UserTable({ users, onEdit, onDeactivate, onReactivate, onResetPin, inactive = false }) {
   if (users.length === 0) return null;
   return (
     <div className="bg-bg-primary border border-border-sec rounded-xl overflow-hidden shadow-card">
@@ -252,7 +379,9 @@ function UserTable({ users, onEdit, onDeactivate, onReactivate, inactive = false
               <td className="px-4 py-3 text-text-sec text-xs whitespace-nowrap">{u.roleName ?? "—"}</td>
               <td className="px-4 py-3 text-xs">
                 {u.department && (
-                  <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${u.department === "QA" ? "bg-bg-accent text-lsg-blue-dark" : "bg-bg-tertiary text-text-sec"}`}>
+                  <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${
+                    u.department === "QA" ? "bg-bg-accent text-lsg-blue-dark" : "bg-bg-tertiary text-text-sec"
+                  }`}>
                     {u.department}
                   </span>
                 )}
@@ -261,11 +390,24 @@ function UserTable({ users, onEdit, onDeactivate, onReactivate, inactive = false
               <td className="px-4 py-3 text-text-sec text-xs">{u.clientIds?.length ?? 0} client{u.clientIds?.length !== 1 ? "s" : ""}</td>
               <td className="px-4 py-3">
                 <div className="flex items-center gap-2 justify-end">
-                  <button onClick={() => onEdit(u)} className="text-xs font-medium text-text-ter hover:text-lsg-blue transition-colors px-2 py-1 rounded hover:bg-bg-accent">Edit</button>
+                  <button onClick={() => onEdit(u)}
+                    className="text-xs font-medium text-text-ter hover:text-lsg-blue transition-colors px-2 py-1 rounded hover:bg-bg-accent">
+                    Edit
+                  </button>
+                  <button onClick={() => onResetPin(u)}
+                    className="text-xs font-medium text-text-ter hover:text-warning-text transition-colors px-2 py-1 rounded hover:bg-warning-surface">
+                    Reset PIN
+                  </button>
                   {inactive ? (
-                    <button onClick={() => onReactivate(u.userId)} className="text-xs font-medium text-success-on hover:opacity-80 transition-colors px-2 py-1 rounded hover:bg-success-surface">Reactivate</button>
+                    <button onClick={() => onReactivate(u.userId)}
+                      className="text-xs font-medium text-success-on hover:opacity-80 transition-colors px-2 py-1 rounded hover:bg-success-surface">
+                      Reactivate
+                    </button>
                   ) : (
-                    <button onClick={() => onDeactivate(u)} className="text-xs font-medium text-error-on hover:opacity-80 transition-colors px-2 py-1 rounded hover:bg-error-surface">Deactivate</button>
+                    <button onClick={() => onDeactivate(u)}
+                      className="text-xs font-medium text-error-on hover:opacity-80 transition-colors px-2 py-1 rounded hover:bg-error-surface">
+                      Deactivate
+                    </button>
                   )}
                 </div>
               </td>

@@ -9,9 +9,11 @@ import com.qually.qually.repositories.*;
 import jakarta.persistence.EntityNotFoundException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.security.SecureRandom;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -21,19 +23,22 @@ public class UserService {
 
     private static final Logger log = LoggerFactory.getLogger(UserService.class);
 
-    private final UserRepository userRepository;
-    private final RoleRepository roleRepository;
+    private final UserRepository  userRepository;
+    private final RoleRepository  roleRepository;
     private final ClientRepository clientRepository;
-    private final UserMapper userMapper;
+    private final UserMapper      userMapper;
+    private final PasswordEncoder passwordEncoder;
 
     public UserService(UserRepository userRepository,
                        RoleRepository roleRepository,
                        ClientRepository clientRepository,
-                       UserMapper userMapper) {
-        this.userRepository = userRepository;
-        this.roleRepository = roleRepository;
+                       UserMapper userMapper,
+                       PasswordEncoder passwordEncoder) {
+        this.userRepository  = userRepository;
+        this.roleRepository  = roleRepository;
         this.clientRepository = clientRepository;
-        this.userMapper = userMapper;
+        this.userMapper      = userMapper;
+        this.passwordEncoder = passwordEncoder;
     }
 
     @Transactional
@@ -118,7 +123,44 @@ public class UserService {
         return userMapper.toDTO(userRepository.save(user));
     }
 
+    /**
+     * Resets a user's PIN to a randomly generated 6-digit code and forces
+     * them to change it on next login.
+     *
+     * <p>The plain PIN is returned exactly once — it is never stored.
+     * The caller (QA admin) must share it with the user securely. The
+     * Settings page displays it in a one-time modal with a copy button.</p>
+     *
+     * @param id The user whose PIN is being reset.
+     * @return The plain-text temporary PIN — shown once, then discarded.
+     */
+    @Transactional
+    public String resetPin(Integer id) {
+        User user = userRepository.findById(id)
+                .orElseThrow(() -> new EntityNotFoundException(
+                        "User with ID %d not found".formatted(id)));
+
+        String plainPin = generatePin();
+        user.setPinHash(passwordEncoder.encode(plainPin));
+        user.setForcePinChange(true);
+        userRepository.save(user);
+
+        log.info("PIN reset for user {} ({}) by admin", id, user.getUserEmail());
+        return plainPin;
+    }
+
     // ── Helpers ───────────────────────────────────────────────
+
+    /**
+     * Generates a cryptographically random 6-digit PIN.
+     * Uses {@link SecureRandom} — not {@link java.util.Random} which is
+     * predictable and unsuitable for security-sensitive values.
+     */
+    private String generatePin() {
+        SecureRandom random = new SecureRandom();
+        int pin = 100_000 + random.nextInt(900_000); // 100000–999999
+        return String.valueOf(pin);
+    }
 
     private Role resolveRole(Integer roleId) {
         if (roleId == null) return null;
@@ -140,25 +182,6 @@ public class UserService {
                 .map(id -> clientRepository.findById(id)
                         .orElseThrow(() -> new EntityNotFoundException(
                                 "Client with ID %d not found".formatted(id))))
-                .collect(Collectors.toList()); // mutable — not .toList()
-    }
-
-    private UserResponseDTO toDTO(User user) {
-        Role role = user.getRole();
-        return UserResponseDTO.builder()
-                .userId(user.getUserId())
-                .userEmail(user.getUserEmail())
-                .fullName(user.getFullName())
-                .roleId(role != null ? role.getRoleId() : null)
-                .roleName(role != null ? role.getRoleName() : null)
-                .department(role != null ? role.getDepartment() : null)
-                .hierarchyLevel(role != null ? role.getHierarchyLevel() : null)
-                .canBeAudited(role != null ? role.getCanBeAudited() : false)
-                .canRaiseDispute(role != null ? role.getCanRaiseDispute() : false)
-                .managerId(user.getManager() != null ? user.getManager().getUserId() : null)
-                .managerName(user.getManager() != null ? user.getManager().getFullName() : null)
-                .clientIds(user.getClients().stream().map(Client::getClientId).toList())
-                .isActive(user.getIsActive())
-                .build();
+                .collect(Collectors.toList());
     }
 }

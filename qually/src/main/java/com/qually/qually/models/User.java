@@ -43,11 +43,29 @@ public class User {
     @Builder.Default
     private Boolean isActive = true;
 
+    /**
+     * BCrypt hash of the user's PIN.
+     * Seeded on first startup from the user's first name (lowercase, trimmed).
+     * Set to null until DataSeeder runs. Removed entirely when Microsoft Auth
+     * replaces the PIN login flow.
+     */
+    @Column(name = "pin_hash", length = 60)
+    private String pinHash;
+
+    /**
+     * When true, the user is redirected to the Change PIN page after login
+     * and cannot access the rest of the app until they set a new PIN.
+     * Set to true by default for all new users and when an admin resets a PIN.
+     */
+    @Column(name = "force_pin_change", nullable = false)
+    @Builder.Default
+    private Boolean forcePinChange = true;
+
     @ManyToMany(fetch = FetchType.LAZY)
     @JoinTable(
-        name = "user_clients",
-        joinColumns = @JoinColumn(name = "user_id"),
-        inverseJoinColumns = @JoinColumn(name = "client_id")
+            name = "user_clients",
+            joinColumns = @JoinColumn(name = "user_id"),
+            inverseJoinColumns = @JoinColumn(name = "client_id")
     )
     @Builder.Default
     private List<Client> clients = new ArrayList<>();
