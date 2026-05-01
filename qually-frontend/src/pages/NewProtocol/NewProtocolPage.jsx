@@ -4,6 +4,7 @@
  * Form for creating a new audit protocol.
  * An Audit Logic Type selector has been added — it is now a required field
  * because `audit_logic_type NOT NULL` lives on `audit_protocols` in the DB.
+ * Protocol Abbreviation added — optional, used in calibration round names.
  */
 
 import { useNavigate } from "react-router-dom";
@@ -19,14 +20,15 @@ import { AUDIT_LOGIC_TYPE_META } from "../../constants";
 export default function NewProtocolPage() {
   const navigate = useNavigate();
   const {
-    clientId,        setClientId,
-    protocolName,    setProtocolName,
-    version,         setVersion,
-    auditLogicType,  setAuditLogicType,
+    clientId,             setClientId,
+    protocolName,         setProtocolName,
+    protocolAbbreviation, setProtocolAbbreviation,
+    version,              setVersion,
+    auditLogicType,       setAuditLogicType,
     questions,
-    clients,         clientsLoading,
-    canSave,         saving,           saveError,
-    updateQuestion,  removeQuestion,   addQuestion,
+    clients,              clientsLoading,
+    canSave,              saving,           saveError,
+    updateQuestion,       removeQuestion,   addQuestion,
     handleSave,
   } = useNewProtocol();
 
@@ -71,6 +73,29 @@ export default function NewProtocolPage() {
                 placeholder="1"
               />
             </div>
+          </div>
+
+          {/* Protocol Abbreviation — optional, used in calibration round names */}
+          <div>
+            <Label>
+              Abbreviation
+              <span className="text-text-ter font-normal ml-1 text-[11px]">
+                (optional — used in calibration round names, e.g. "DSP")
+              </span>
+            </Label>
+            <TextInput
+              value={protocolAbbreviation}
+              onChange={(e) =>
+                setProtocolAbbreviation(
+                  e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 10)
+                )
+              }
+              placeholder='e.g. "DSP"'
+              className="font-mono tracking-widest w-32"
+            />
+            <p className="text-[11px] text-text-ter mt-1">
+              2–10 uppercase letters or digits. Auto-formatted as you type.
+            </p>
           </div>
 
           {/* Audit Logic Type — required, stored on the protocol */}

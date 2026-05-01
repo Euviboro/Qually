@@ -2,14 +2,16 @@ import { useState, useEffect, useRef } from "react";
 import { createClient } from "../../api/clients";
 
 export function AddClientModal({ isOpen, onClose, onClientCreated }) {
-  const [clientName, setClientName] = useState("");
-  const [saving, setSaving]         = useState(false);
-  const [error, setError]           = useState(null);
-  const inputRef                    = useRef(null);
+  const [clientName,         setClientName]         = useState("");
+  const [clientAbbreviation, setClientAbbreviation] = useState("");
+  const [saving,             setSaving]             = useState(false);
+  const [error,              setError]              = useState(null);
+  const inputRef = useRef(null);
 
   useEffect(() => {
     if (isOpen) {
       setClientName("");
+      setClientAbbreviation("");
       setError(null);
       setSaving(false);
       setTimeout(() => inputRef.current?.focus(), 50);
@@ -31,7 +33,10 @@ export function AddClientModal({ isOpen, onClose, onClientCreated }) {
     setError(null);
     setSaving(true);
     try {
-      const newClient = await createClient({ clientName: clientName.trim() });
+      const newClient = await createClient({
+        clientName:         clientName.trim(),
+        clientAbbreviation: clientAbbreviation.trim().toUpperCase() || undefined,
+      });
       onClientCreated(newClient);
       onClose();
     } catch (err) {
@@ -81,6 +86,25 @@ export function AddClientModal({ isOpen, onClose, onClientCreated }) {
               required
               className="w-full px-3 py-[9px] text-[13px] font-sans bg-bg-primary disabled:bg-bg-secondary text-text-pri placeholder:text-text-ter border border-border-sec rounded-md outline-none focus:border-lsg-blue focus:ring-3 focus:ring-lsg-blue/10 transition-[border-color,box-shadow]"
             />
+          </div>
+
+          <div>
+            <label className="block text-[12px] font-semibold text-text-sec tracking-wide mb-1.5">
+              Abbreviation
+              <span className="text-text-ter font-normal ml-1">(optional — used in calibration round names)</span>
+            </label>
+            <input
+              type="text"
+              value={clientAbbreviation}
+              onChange={(e) => setClientAbbreviation(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ""))}
+              placeholder='e.g. "DSV"'
+              maxLength={10}
+              disabled={saving}
+              className="w-full px-3 py-[9px] text-[13px] font-mono bg-bg-primary disabled:bg-bg-secondary text-text-pri placeholder:text-text-ter border border-border-sec rounded-md outline-none focus:border-lsg-blue focus:ring-3 focus:ring-lsg-blue/10 transition-[border-color,box-shadow] uppercase tracking-widest"
+            />
+            <p className="text-[11px] text-text-ter mt-1">
+              2–10 uppercase letters or digits. Auto-formatted as you type.
+            </p>
           </div>
 
           {error && (
