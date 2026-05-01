@@ -23,11 +23,11 @@ public class UserService {
 
     private static final Logger log = LoggerFactory.getLogger(UserService.class);
 
-    private final UserRepository  userRepository;
-    private final RoleRepository  roleRepository;
+    private final UserRepository   userRepository;
+    private final RoleRepository   roleRepository;
     private final ClientRepository clientRepository;
-    private final UserMapper      userMapper;
-    private final PasswordEncoder passwordEncoder;
+    private final UserMapper       userMapper;
+    private final PasswordEncoder  passwordEncoder;
 
     public UserService(UserRepository userRepository,
                        RoleRepository roleRepository,
@@ -48,8 +48,8 @@ public class UserService {
             throw new IllegalArgumentException(
                     "A user with email '%s' already exists".formatted(dto.getUserEmail()));
         }
-        Role role = resolveRole(dto.getRoleId());
-        User manager = resolveManager(dto.getManagerId());
+        Role role      = resolveRole(dto.getRoleId());
+        User manager   = resolveManager(dto.getManagerId());
         List<Client> clients = resolveClients(dto.getClientIds());
 
         User saved = userRepository.save(userMapper.toEntity(dto, role, manager, clients));
@@ -90,6 +90,20 @@ public class UserService {
                 .stream().map(userMapper::toDTO).toList();
     }
 
+    /**
+     * Returns all users eligible to participate in a calibration round:
+     * all active QA users and active OPERATIONS Team Leaders / Supervisors
+     * (canBeAudited = false) assigned to the given client.
+     *
+     * Results are ordered department-first (QA then OPERATIONS) then by name,
+     * matching the grouping the create-round form uses.
+     */
+    @Transactional(readOnly = true)
+    public List<UserResponseDTO> getCalibrationEligibleUsers(Integer clientId) {
+        return userRepository.findEligibleCalibrationParticipants(clientId)
+                .stream().map(userMapper::toDTO).toList();
+    }
+
     @Transactional
     public UserResponseDTO updateUser(Integer id, UserUpdateRequestDTO dto) {
         User user = userRepository.findById(id)
@@ -124,15 +138,9 @@ public class UserService {
     }
 
     /**
-     * Resets a user's PIN to a randomly generated 6-digit code and forces
-     * them to change it on next login.
-     *
-     * <p>The plain PIN is returned exactly once — it is never stored.
-     * The caller (QA admin) must share it with the user securely. The
-     * Settings page displays it in a one-time modal with a copy button.</p>
-     *
-     * @param id The user whose PIN is being reset.
-     * @return The plain-text temporary PIN — shown once, then discarded.
+     * Resets a user's PIN to a randomly generated 6-digit code.
+     * Sets {@code force_pin_change = true} so the user must change it on
+     * next login. The plain PIN is returned once and never stored.
      */
     @Transactional
     public String resetPin(Integer id) {
@@ -145,20 +153,15 @@ public class UserService {
         user.setForcePinChange(true);
         userRepository.save(user);
 
-        log.info("PIN reset for user {} ({}) by admin", id, user.getUserEmail());
+        log.info("PIN reset for user {} ({})", id, user.getUserEmail());
         return plainPin;
     }
 
     // ── Helpers ───────────────────────────────────────────────
 
-    /**
-     * Generates a cryptographically random 6-digit PIN.
-     * Uses {@link SecureRandom} — not {@link java.util.Random} which is
-     * predictable and unsuitable for security-sensitive values.
-     */
     private String generatePin() {
         SecureRandom random = new SecureRandom();
-        int pin = 100_000 + random.nextInt(900_000); // 100000–999999
+        int pin = 100_000 + random.nextInt(900_000);
         return String.valueOf(pin);
     }
 

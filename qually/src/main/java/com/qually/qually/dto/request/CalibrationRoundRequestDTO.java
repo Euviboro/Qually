@@ -1,6 +1,5 @@
 package com.qually.qually.dto.request;
 
-import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
@@ -12,15 +11,16 @@ import java.util.List;
 /**
  * Request payload for {@code POST /api/calibration/rounds}.
  *
+ * <p>{@code roundName} has been removed — it is generated server-side from
+ * client abbreviation + protocol abbreviation + question category + YYMM +
+ * consecutive sequence number. Format: {@code DSV-DSP-BUS-2604-001}.</p>
+ *
  * <p>The creator is sourced from the JWT security context — not from this DTO.
  * The creator is automatically enrolled as a participant on the backend.</p>
  */
 @Getter
 @Setter
 public class CalibrationRoundRequestDTO {
-
-    @NotBlank(message = "Round name is required")
-    private String roundName;
 
     @NotNull(message = "Client ID is required")
     private Integer clientId;
@@ -38,12 +38,12 @@ public class CalibrationRoundRequestDTO {
      */
     @NotEmpty(message = "At least one interaction ID is required")
     @Size(max = 10, message = "A round may have at most 10 interaction IDs")
-    private List<@NotBlank(message = "Interaction ID must not be blank") String> interactionIds;
+    private List<@jakarta.validation.constraints.NotBlank(
+            message = "Interaction ID must not be blank") String> interactionIds;
 
     /**
-     * User IDs of all participants — including the expert and the creator.
-     * The creator is added automatically even if omitted, but it is good
-     * practice to include them explicitly.
+     * User IDs of all participants — including the expert.
+     * The creator is added automatically even if omitted.
      */
     @NotEmpty(message = "At least one participant is required")
     private List<Integer> participantUserIds;

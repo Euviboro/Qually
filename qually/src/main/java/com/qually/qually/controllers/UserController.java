@@ -28,12 +28,26 @@ public class UserController {
         return ResponseEntity.ok(userService.createUser(dto));
     }
 
+    /**
+     * @param roleName              Optional role name filter.
+     * @param activeOnly            When true, returns only active users.
+     * @param clientId              Required when {@code auditable=true} or
+     *                              {@code calibrationEligible=true}.
+     * @param auditable             When true, returns auditable users for clientId.
+     * @param calibrationEligible   When true, returns calibration-eligible users
+     *                              (all QA + OPERATIONS TL/Supervisor for clientId).
+     */
     @GetMapping
     public ResponseEntity<List<UserResponseDTO>> getAllUsers(
-            @RequestParam(required = false) String roleName,
+            @RequestParam(required = false) String  roleName,
             @RequestParam(required = false, defaultValue = "false") Boolean activeOnly,
             @RequestParam(required = false) Integer clientId,
-            @RequestParam(required = false, defaultValue = "false") Boolean auditable) {
+            @RequestParam(required = false, defaultValue = "false") Boolean auditable,
+            @RequestParam(required = false, defaultValue = "false") Boolean calibrationEligible) {
+
+        if (Boolean.TRUE.equals(calibrationEligible) && clientId != null) {
+            return ResponseEntity.ok(userService.getCalibrationEligibleUsers(clientId));
+        }
         if (Boolean.TRUE.equals(auditable) && clientId != null) {
             return ResponseEntity.ok(userService.getAuditableUsers(clientId));
         }
@@ -65,30 +79,14 @@ public class UserController {
     /**
      * Resets a user's PIN to a randomly generated 6-digit code.
      * Sets {@code force_pin_change = true} so the user must change it on
-     * next login. The generated PIN is returned once — the caller must
-     * share it with the user securely.
-     *
-     * <p>Only QA admins should call this endpoint. Authorization is enforced
-     * at the service layer via the caller's role — the calling user's ID is
-     * read from the JWT security context, not from a request header.</p>
-     *
-     * @return Map containing {@code pin} — the plain-text temporary PIN,
-     *         shown once and never stored.
+     * next login. The plain PIN is returned once — the caller must share
+     * it with the user securely.
      */
     @PutMapping("/{id}/reset-pin")
     public ResponseEntity<Map<String, String>> resetPin(@PathVariable Integer id) {
-        // Verify the caller is authenticated — SecurityConfig ensures this,
-        // but we log who performed the reset for audit purposes.
-        Integer callerId = (Integer) SecurityContextHolder
-                .getContext()
-                .getAuthentication()
-                .getPrincipal();
-
         String generatedPin = userService.resetPin(id);
-
         return ResponseEntity.ok(Map.of(
                 "pin",     generatedPin,
-                "message", "PIN reset successfully. Share this PIN with the user — it will not be shown again."
-        ));
+                "message", "PIN reset successfully. Share this PIN with the user — it will not be shown again."));
     }
 }

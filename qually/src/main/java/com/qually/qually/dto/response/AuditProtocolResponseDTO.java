@@ -10,20 +10,25 @@ import java.util.List;
 /**
  * Response DTO for an {@link com.qually.qually.models.AuditProtocol}.
  *
- * <p>{@code auditLogicType} added — it is stored on the protocol, not the
- * session, and must be available to the frontend so the Log Session page can
+ * <p>{@code auditLogicType} is stored on the protocol, not the session,
+ * and must be available to the frontend so the Log Session page can
  * display it as read-only context.</p>
  */
 @Getter
 @Builder
 public class AuditProtocolResponseDTO {
-    private Integer protocolId;
-    private String protocolName;
-    private Integer protocolVersion;
+    private Integer        protocolId;
+    private String         protocolName;
+    /**
+     * Short uppercase abbreviation used in calibration round names.
+     * May be null if not yet set for this protocol.
+     */
+    private String         protocolAbbreviation;
+    private Integer        protocolVersion;
     private ProtocolStatus protocolStatus;
     /** Scoring strategy applied to all sessions that use this protocol. */
     private AuditLogicType auditLogicType;
-    private Integer clientId;
-    private String clientName;
+    private Integer        clientId;
+    private String         clientName;
     private List<AuditQuestionResponseDTO> auditQuestions;
 }

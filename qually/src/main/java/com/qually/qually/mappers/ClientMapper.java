@@ -7,8 +7,6 @@ import org.springframework.stereotype.Component;
 
 /**
  * Maps between {@link Client} entities and their DTOs.
- * Extracted from the inline conversion that previously lived
- * in {@code ClientService.toDTO()}.
  */
 @Component
 public class ClientMapper {
@@ -17,12 +15,16 @@ public class ClientMapper {
         return ClientResponseDTO.builder()
                 .clientId(client.getClientId())
                 .clientName(client.getClientName())
+                .clientAbbreviation(client.getClientAbbreviation())
                 .build();
     }
 
     public Client toEntity(ClientRequestDTO dto) {
         return Client.builder()
                 .clientName(dto.getClientName())
+                .clientAbbreviation(dto.getClientAbbreviation() != null
+                        ? dto.getClientAbbreviation().toUpperCase().trim()
+                        : null)
                 .build();
     }
 }

@@ -33,6 +33,15 @@ public class AuditProtocol {
     @Column(name = "protocol_name", nullable = false, length = 100)
     private String protocolName;
 
+    /**
+     * Short uppercase abbreviation used in auto-generated calibration round names.
+     * Example: "COPC", "DSP", "CXQ". Does not need to be unique globally
+     * but should be unique within a client's protocols for clarity.
+     * Must be set before a calibration round can be created using this protocol.
+     */
+    @Column(name = "protocol_abbreviation", length = 10)
+    private String protocolAbbreviation;
+
     @Column(name = "protocol_version", nullable = false)
     private Integer protocolVersion;
 
@@ -53,5 +62,6 @@ public class AuditProtocol {
     private Client client;
 
     @OneToMany(mappedBy = "auditProtocol", cascade = CascadeType.ALL, orphanRemoval = true)
+    @Builder.Default
     private List<AuditQuestion> auditQuestions = new ArrayList<>();
 }

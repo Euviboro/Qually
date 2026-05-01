@@ -11,10 +11,6 @@ import java.util.ArrayList;
 
 /**
  * Mapper for {@link AuditProtocol} ↔ DTO conversions.
- *
- * <p>{@code auditLogicType} is now handled in both directions — it was added to
- * {@link AuditProtocol} to match the {@code audit_logic_type NOT NULL} column
- * in the {@code audit_protocols} table.</p>
  */
 @Component
 public class AuditProtocolMapper {
@@ -25,18 +21,13 @@ public class AuditProtocolMapper {
         this.auditQuestionMapper = auditQuestionMapper;
     }
 
-    /**
-     * Maps a persisted {@link AuditProtocol} to its response DTO.
-     *
-     * @param protocol The managed entity. Must not be null.
-     * @return The fully populated response DTO including questions and logic type.
-     */
     public AuditProtocolResponseDTO toDTO(AuditProtocol protocol) {
         if (protocol == null) return null;
 
         return AuditProtocolResponseDTO.builder()
                 .protocolId(protocol.getProtocolId())
                 .protocolName(protocol.getProtocolName())
+                .protocolAbbreviation(protocol.getProtocolAbbreviation())
                 .protocolVersion(protocol.getProtocolVersion())
                 .protocolStatus(protocol.getProtocolStatus())
                 .auditLogicType(protocol.getAuditLogicType())
@@ -44,25 +35,20 @@ public class AuditProtocolMapper {
                 .clientName(protocol.getClient().getClientName())
                 .auditQuestions(protocol.getAuditQuestions() != null
                         ? protocol.getAuditQuestions().stream()
-                                .map(auditQuestionMapper::toDTO)
-                                .toList()
+                        .map(auditQuestionMapper::toDTO)
+                        .toList()
                         : new ArrayList<>())
                 .build();
     }
 
-    /**
-     * Maps an {@link AuditProtocolRequestDTO} to a new (unsaved) entity,
-     * recursively building the question graph.
-     *
-     * @param dto    The incoming request payload.
-     * @param parent The owning client entity.
-     * @return A new, unsaved {@link AuditProtocol} with all children attached.
-     */
     public AuditProtocol toEntity(AuditProtocolRequestDTO dto, Client parent) {
         if (dto == null) return null;
 
         AuditProtocol auditProtocol = AuditProtocol.builder()
                 .protocolName(dto.getProtocolName())
+                .protocolAbbreviation(dto.getProtocolAbbreviation() != null
+                        ? dto.getProtocolAbbreviation().toUpperCase().trim()
+                        : null)
                 .protocolVersion(dto.getProtocolVersion())
                 .protocolStatus(dto.getProtocolStatus() != null
                         ? dto.getProtocolStatus()
