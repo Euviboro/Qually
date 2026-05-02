@@ -59,7 +59,7 @@ public class JwtFilter extends OncePerRequestFilter {
                                     HttpServletResponse response,
                                     FilterChain filterChain)
             throws ServletException, IOException {
-
+        log.debug("JwtFilter processing: {} {}", request.getMethod(), request.getRequestURI());
         // Skip OPTIONS preflight — browsers send these with no cookies and
         // Spring Security must return 200 for CORS to work
         if ("OPTIONS".equalsIgnoreCase(request.getMethod())) {

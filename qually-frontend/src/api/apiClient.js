@@ -3,21 +3,6 @@
 const base = import.meta.env.VITE_API_BASE;
 
 /**
- * Reads the XSRF-TOKEN cookie that Spring Security sets automatically.
- * The value is sent back as X-XSRF-Token on every mutating request.
- *
- * @returns {string|null}
- */
-function getCsrfToken() {
-  const match = document.cookie
-    .split("; ")
-    .find((row) => row.startsWith("XSRF-TOKEN="));
-  return match ? decodeURIComponent(match.split("=")[1]) : null;
-}
-
-const MUTATING_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
-
-/**
  * Whether a token refresh is already in progress.
  * Prevents multiple parallel refresh calls when several requests 401 at once.
  */
@@ -42,10 +27,7 @@ async function attemptRefresh() {
     const res = await fetch(`${base}/auth/refresh`, {
       method:      "POST",
       credentials: "include",
-      headers: {
-        "Content-Type": "application/json",
-        ...(getCsrfToken() ? { "X-XSRF-Token": getCsrfToken() } : {}),
-      },
+      headers:     { "Content-Type": "application/json" },
     });
     return res.ok;
   } catch {
@@ -56,13 +38,9 @@ async function attemptRefresh() {
 /**
  * Core HTTP request wrapper.
  *
- * Changes from the previous version:
- * - X-User-Id header removed — identity comes from the JWT access_token cookie
- * - credentials: "include" added — sends httpOnly cookies on every request
- * - X-XSRF-Token header added to all mutating requests (POST/PUT/PATCH/DELETE)
- *   to satisfy Spring Security's CSRF protection
- * - 401 interceptor: TOKEN_EXPIRED triggers a silent refresh and retry once;
- *   TOKEN_INVALID triggers logout and redirect to /login
+ * CSRF is handled by SameSite=Strict on the access_token cookie — the
+ * browser will never send it on cross-site requests, eliminating the
+ * attack vector. No CSRF token header is needed.
  *
  * @param {string} path
  * @param {RequestInit} [options={}]
@@ -70,17 +48,11 @@ async function attemptRefresh() {
  * @returns {Promise<unknown>} Parsed JSON body or null for empty responses.
  */
 async function request(path, options = {}, isRetry = false) {
-  const method = (options.method ?? "GET").toUpperCase();
-  const csrfToken = getCsrfToken();
-
   const res = await fetch(`${base}${path}`, {
     ...options,
     credentials: "include",
     headers: {
       "Content-Type": "application/json",
-      ...(MUTATING_METHODS.has(method) && csrfToken
-        ? { "X-XSRF-Token": csrfToken }
-        : {}),
       ...(options.headers ?? {}),
     },
   });
@@ -90,7 +62,6 @@ async function request(path, options = {}, isRetry = false) {
     const body = await res.json().catch(() => ({}));
 
     if (body.code === "TOKEN_EXPIRED") {
-      // Refresh in flight — wait for it rather than triggering another
       if (refreshing) {
         await waitForRefresh();
         return request(path, options, true);
@@ -102,12 +73,10 @@ async function request(path, options = {}, isRetry = false) {
       onRefreshed();
 
       if (success) {
-        // Retry the original request with the new access token cookie
         return request(path, options, true);
       }
     }
 
-    // TOKEN_INVALID or refresh failed — log out and redirect
     window.dispatchEvent(new CustomEvent("qually:logout"));
     throw new Error("Session expired. Please log in again.");
   }

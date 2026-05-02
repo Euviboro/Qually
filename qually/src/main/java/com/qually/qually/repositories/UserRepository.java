@@ -48,17 +48,16 @@ public interface UserRepository extends JpaRepository<User, Integer> {
     @Query("""
         SELECT DISTINCT u FROM User u
         JOIN u.role r
-        LEFT JOIN u.clients c
+        JOIN u.clients c
         WHERE u.isActive = true
+          AND c.clientId = :clientId
           AND (
-            r.department = com.qually.qually.models.enums.Department.QA
-            OR (
-              r.department = com.qually.qually.models.enums.Department.OPERATIONS
-              AND r.canBeAudited = false
-              AND c.clientId = :clientId
-            )
+            (r.department = com.qually.qually.models.enums.Department.QA
+             AND r.hierarchyLevel > 3)
+            OR
+            (r.department = com.qually.qually.models.enums.Department.OPERATIONS
+             AND r.hierarchyLevel > 4)
           )
-        ORDER BY r.department ASC, u.fullName ASC
     """)
     List<User> findEligibleCalibrationParticipants(@Param("clientId") Integer clientId);
 

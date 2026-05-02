@@ -5,49 +5,27 @@ import { AppShell } from "./components/layout/AppShell";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import { PageSpinner } from "./components/ui/PageSpinner";
 import { ErrorBoundary } from "./components/ErrorBoundary";
+import { RequireAuth, RequirePinChanged, RequireQA, IndexRedirect } from "./router/guards";
 import "./index.css";
 
-const DashboardPage      = lazy(() => import("./pages/Dashboard/DashboardPage"));
-const NewProtocolPage    = lazy(() => import("./pages/NewProtocol/NewProtocolPage"));
-const ShowProtocolPage   = lazy(() => import("./pages/ShowProtocol/ShowProtocolPage"));
-const LogSessionPage     = lazy(() => import("./pages/LogSession/LogSessionPage"));
-const DraftsPage         = lazy(() => import("./pages/Drafts/DraftsPage"));
-const SessionResultsPage = lazy(() => import("./pages/SessionResults/SessionResultsPage"));
-const ResultsPage        = lazy(() => import("./pages/Results/ResultsPage"));
-const DisputesPage       = lazy(() => import("./pages/Disputes/DisputesPage"));
-const SettingsPage       = lazy(() => import("./pages/Settings/SettingsPage"));
-const LoginPage          = lazy(() => import("./pages/Login/LoginPage"));
-const ChangePinPage      = lazy(() => import("./pages/ChangePin/ChangePinPage"));
+const DashboardPage          = lazy(() => import("./pages/Dashboard/DashboardPage"));
+const NewProtocolPage        = lazy(() => import("./pages/NewProtocol/NewProtocolPage"));
+const ShowProtocolPage       = lazy(() => import("./pages/ShowProtocol/ShowProtocolPage"));
+const LogSessionPage         = lazy(() => import("./pages/LogSession/LogSessionPage"));
+const DraftsPage             = lazy(() => import("./pages/Drafts/DraftsPage"));
+const SessionResultsPage     = lazy(() => import("./pages/SessionResults/SessionResultsPage"));
+const ResultsPage            = lazy(() => import("./pages/Results/ResultsPage"));
+const DisputesPage           = lazy(() => import("./pages/Disputes/DisputesPage"));
+const SettingsPage           = lazy(() => import("./pages/Settings/SettingsPage"));
+const LoginPage              = lazy(() => import("./pages/Login/LoginPage"));
+const ChangePinPage          = lazy(() => import("./pages/ChangePin/ChangePinPage"));
+const CalibrationListPage    = lazy(() => import("./pages/Calibration/CalibrationListPage"));
+const CreateCalibrationPage  = lazy(() => import("./pages/Calibration/CreateCalibrationPage"));
 
-/** Redirects to /login when no user is in context. */
-function RequireAuth({ children }) {
-  const { user } = useAuth();
-  if (!user) return <Navigate to="/login" replace />;
-  return children;
-}
 
-/**
- * Redirects to /change-pin when the user has a forced PIN change pending.
- * Prevents accessing the app before the PIN is changed.
- */
-function RequirePinChanged({ children }) {
-  const { user } = useAuth();
-  if (user?.forcePinChange) return <Navigate to="/change-pin" replace />;
-  return children;
-}
 
-/** Redirects non-QA users away from QA-only routes. */
-function RequireQA({ children }) {
-  const { isQA } = useAuth();
-  if (!isQA) return <Navigate to="/results" replace />;
-  return children;
-}
 
-/** QA → Dashboard, OPERATIONS → /results */
-function IndexRedirect() {
-  const { isQA } = useAuth();
-  return isQA ? <DashboardPage /> : <Navigate to="/results" replace />;
-}
+
 
 const router = createBrowserRouter([
   {
@@ -82,18 +60,20 @@ const router = createBrowserRouter([
           { index: true, element: <IndexRedirect /> },
 
           // QA-only routes
-          { path: "protocols/new", element: <RequireQA><NewProtocolPage /></RequireQA> },
-          { path: "protocols/:id", element: <RequireQA><ShowProtocolPage /></RequireQA> },
-          { path: "sessions/log",  element: <RequireQA><LogSessionPage /></RequireQA> },
-          { path: "drafts",        element: <RequireQA><DraftsPage /></RequireQA> },
+          { path: "protocols/new",    element: <RequireQA><NewProtocolPage /></RequireQA> },
+          { path: "protocols/:id",    element: <RequireQA><ShowProtocolPage /></RequireQA> },
+          { path: "sessions/log",     element: <RequireQA><LogSessionPage /></RequireQA> },
+          { path: "drafts",           element: <RequireQA><DraftsPage /></RequireQA> },
+          { path: "calibration",      element: <RequireQA><CalibrationListPage /></RequireQA> },
+          { path: "calibration/new",  element: <RequireQA><CreateCalibrationPage /></RequireQA> },
 
           // Shared routes
-          { path: "sessions/:id",   element: <SessionResultsPage /> },
-          { path: "results",        element: <ResultsPage /> },
-          { path: "disputes",       element: <DisputesPage /> },
+          { path: "sessions/:id",     element: <SessionResultsPage /> },
+          { path: "results",          element: <ResultsPage /> },
+          { path: "disputes",         element: <DisputesPage /> },
 
           // QA-only settings
-          { path: "settings/users", element: <RequireQA><SettingsPage /></RequireQA> },
+          { path: "settings/users",   element: <RequireQA><SettingsPage /></RequireQA> },
         ],
       },
     ],

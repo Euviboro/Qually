@@ -15,14 +15,10 @@ import java.util.List;
 /**
  * CORS configuration.
  *
- * <p>{@code allowedHeaders} is now an explicit list instead of {@code "*"}.
- * Using {@code "*"} with {@code allowCredentials(true)} is a misconfiguration
- * in strict CORS contexts and exposes more headers than the application needs.
- * The headers listed are the only ones the frontend sends:
- * {@code Content-Type} for JSON payloads and {@code X-XSRF-Token}
- * for CSRF protection on mutating requests.</p>
- *
- * <p>When real authentication is added, append {@code Authorization} here.</p>
+ * <p>{@code allowedHeaders} contains only {@code Content-Type} — the only
+ * custom header the frontend sends. {@code X-XSRF-Token} has been removed
+ * now that CSRF protection is handled by {@code SameSite=Strict} cookies
+ * rather than token-based CSRF.</p>
  */
 @Configuration
 public class CorsConfig implements WebMvcConfigurer {
@@ -35,7 +31,7 @@ public class CorsConfig implements WebMvcConfigurer {
         registry.addMapping("/api/**")
                 .allowedOrigins(allowedOrigins)
                 .allowedMethods("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS")
-                .allowedHeaders("Content-Type", "X-XSRF-Token")
+                .allowedHeaders("Content-Type")
                 .allowCredentials(true)
                 .maxAge(3600);
     }
@@ -44,8 +40,8 @@ public class CorsConfig implements WebMvcConfigurer {
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration config = new CorsConfiguration();
         config.setAllowedOrigins(Arrays.asList(allowedOrigins));
-        config.setAllowedMethods(List.of("GET","POST","PUT","PATCH","DELETE","OPTIONS"));
-        config.setAllowedHeaders(List.of("Content-Type", "X-XSRF-Token"));
+        config.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
+        config.setAllowedHeaders(List.of("Content-Type"));
         config.setAllowCredentials(true);
         config.setMaxAge(3600L);
 

@@ -15,6 +15,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.security.SecureRandom;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -101,7 +102,13 @@ public class UserService {
     @Transactional(readOnly = true)
     public List<UserResponseDTO> getCalibrationEligibleUsers(Integer clientId) {
         return userRepository.findEligibleCalibrationParticipants(clientId)
-                .stream().map(userMapper::toDTO).toList();
+                .stream()
+                .sorted(Comparator
+                        .comparingInt((User u) -> u.getRole() != null
+                                ? u.getRole().getHierarchyLevel() : 99)
+                        .thenComparing(User::getFullName))
+                .map(userMapper::toDTO)
+                .toList();
     }
 
     @Transactional

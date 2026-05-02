@@ -15,6 +15,8 @@ import { api } from "./apiClient";
  * @property {string}  managerName
  * @property {number[]} clientIds
  * @property {boolean} isActive
+ * @property {boolean} canBeAudited
+ * @property {boolean} canRaiseDispute
  */
 
 export const getUsers = (params = {}) => {
@@ -27,13 +29,28 @@ export const getUsers = (params = {}) => {
 
 /**
  * Returns active users with auditable roles for a specific client.
- * Used to populate the Member Audited dropdown.
+ * Used to populate the Member Audited dropdown in Log Session.
  *
  * @param {number} clientId
  * @returns {Promise<UserResponseDTO[]>}
  */
 export const getAuditableUsers = (clientId) =>
   api.get(`/users?auditable=true&clientId=${clientId}`);
+
+/**
+ * Returns all users eligible to participate in a calibration round:
+ * - All active QA users (any level)
+ * - Active OPERATIONS Team Leaders and Supervisors (canBeAudited = false)
+ *   assigned to the given client
+ *
+ * Results are ordered by department (QA first) then by name, matching
+ * the grouped display in the Create Calibration wizard.
+ *
+ * @param {number} clientId
+ * @returns {Promise<UserResponseDTO[]>}
+ */
+export const getCalibrationEligibleUsers = (clientId) =>
+  api.get(`/users?calibrationEligible=true&clientId=${clientId}`);
 
 export const getUserById    = (id)      => api.get(`/users/${id}`);
 export const createUser     = (dto)     => api.post("/users", dto);
