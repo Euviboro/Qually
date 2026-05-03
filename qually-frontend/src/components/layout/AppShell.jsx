@@ -28,7 +28,7 @@ const NAV_ITEMS = [
     icon: (p) => <svg {...p} viewBox="0 0 15 15" fill="none"><rect x="2" y="1" width="11" height="13" rx="1.5" stroke="currentColor" strokeWidth="1.4" strokeDasharray="3 1.5"/><path d="M5 5h5M5 8h3" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/></svg>,
   },
   {
-    to: "/calibration", label: "Calibration", end: false, qaOnly: true,
+    to: "/calibration", label: "Calibration", end: false, qaOnly: false,
     icon: (p) => <svg {...p} viewBox="0 0 15 15" fill="none">
       <circle cx="7.5" cy="7.5" r="6" stroke="currentColor" strokeWidth="1.4"/>
       <path d="M7.5 4v3.5l2.5 1.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>

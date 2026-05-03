@@ -60,9 +60,9 @@ const router = createBrowserRouter([
           { path: "protocols/:id",   element: <RequireQA><ShowProtocolPage /></RequireQA> },
           { path: "sessions/log",    element: <RequireQA><LogSessionPage /></RequireQA> },
           { path: "drafts",          element: <RequireQA><DraftsPage /></RequireQA> },
-          { path: "calibration",     element: <RequireQA><CalibrationListPage /></RequireQA> },
+          { path: "calibration",     element: <CalibrationListPage /> },
           { path: "calibration/new", element: <RequireQA><CreateCalibrationPage /></RequireQA> },
-          { path: "calibration/:id", element: <RequireQA><CalibrationDetailPage /></RequireQA> },
+          { path: "calibration/:id", element: <CalibrationDetailPage /> },
 
           // Shared routes
           { path: "sessions/:id",    element: <SessionResultsPage /> },

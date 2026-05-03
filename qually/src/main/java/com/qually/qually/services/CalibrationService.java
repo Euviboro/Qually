@@ -104,17 +104,15 @@ public class CalibrationService {
                             .formatted(dto.getExpertUserId()));
         }
 
-        // Generate round name — throws if abbreviations are missing
         String roundName = generateRoundName(client, protocol,
                 question.getCategory().name(), LocalDateTime.now());
 
-        // Ensure creator is enrolled
         Set<Integer> allParticipantIds = new LinkedHashSet<>(participantIds);
         allParticipantIds.add(creatorUserId);
 
         Map<Integer, User> userMap = new HashMap<>();
-        for (Integer userId : allParticipantIds) {
-            userMap.put(userId, findUser(userId));
+        for (Integer uid : allParticipantIds) {
+            userMap.put(uid, findUser(uid));
         }
 
         CalibrationRound round = roundRepository.save(
@@ -149,7 +147,7 @@ public class CalibrationService {
                 groups.size(), participants.size());
 
         return roundMapper.toSummaryDTO(round, participants, Map.of(),
-                groups.size(), creatorUserId, false);
+                groups.size(), creatorUserId, "CREATOR", false);
     }
 
     // ── Submit answer ─────────────────────────────────────────
@@ -202,7 +200,13 @@ public class CalibrationService {
         CalibrationRound round = findRoundOrThrow(roundId);
         User closer = findUser(closerUserId);
 
-        validateIsQA(closer, "close calibration rounds");
+        // Only SR_QA (direct manager of creator) can close
+        String callerRole = determineCallerRole(round, closerUserId,
+                participantRepository.findByRound_RoundId(roundId));
+        if (!"SR_QA".equals(callerRole)) {
+            throw new IllegalStateException(
+                    "Only the Sr. QA Specialist managing this round can close it.");
+        }
 
         if (!Boolean.TRUE.equals(round.getIsOpen())) {
             throw new IllegalStateException("This calibration round is already closed.");
@@ -233,7 +237,7 @@ public class CalibrationService {
             if (expertAnswer == null) {
                 group.setIsCalibrated(false);
                 allGroupsCalibrated = false;
-                log.warn("Expert has not answered group {} — group marked not calibrated",
+                log.warn("Expert has not answered group {} — marked not calibrated",
                         group.getGroupId());
                 groupRepository.save(group);
                 continue;
@@ -269,33 +273,41 @@ public class CalibrationService {
                 .toList();
         Map<Integer, Long> answeredByUser = buildAnsweredByUserMap(roundId);
 
+        boolean managerParticipant = participants.stream()
+                .anyMatch(p -> p.getUser().getUserId().equals(closerUserId));
+
         return roundMapper.toDTOForManager(round, groups, participants,
-                expertSessions, answeredByUser);
+                expertSessions, answeredByUser, managerParticipant, closerUserId);
     }
 
     // ── Get rounds ────────────────────────────────────────────
 
+    /**
+     * Returns rounds visible to the caller.
+     *
+     * <p>SR_QA (direct manager of any creator) sees rounds from their
+     * management chain. All other users — QA or OPERATIONS — see only
+     * rounds they are enrolled in as participants.</p>
+     */
     @Transactional(readOnly = true)
     public List<CalibrationRoundResponseDTO> getRounds(Integer userId) {
         User user = findUser(userId);
 
-        if (!Department.QA.equals(getDepartment(user))) {
-            return List.of();
-        }
+        // SR_QA check: is this user the direct manager of any QA Specialist?
+        // We use subordinate IDs — if any subordinate created a round, this is a manager view.
+        List<Integer> subordinateIds = userRepository.findAllSubordinateIds(userId);
+        boolean isSrQa = !subordinateIds.isEmpty()
+                && Department.QA.equals(getDepartment(user));
 
-        boolean isManager = isQaManager(userId);
         List<CalibrationRound> rounds;
 
-        if (isManager) {
-            List<Integer> subordinateIds = userRepository.findAllSubordinateIds(userId);
+        if (isSrQa) {
             rounds = roundRepository.findAllWithDetails().stream()
-                    .filter(r -> {
-                        Integer creatorId = r.getCreatedBy().getUserId();
-                        return creatorId.equals(userId) ||
-                                subordinateIds.contains(creatorId);
-                    })
+                    .filter(r -> r.getCreatedBy().getUserId().equals(userId)
+                            || subordinateIds.contains(r.getCreatedBy().getUserId()))
                     .toList();
         } else {
+            // QA Specialist, EXPERT, plain PARTICIPANT, OPERATIONS — enrolled rounds only
             rounds = roundRepository.findByParticipantUserId(userId);
         }
 
@@ -303,8 +315,13 @@ public class CalibrationService {
             List<CalibrationParticipant> participants =
                     participantRepository.findByRound_RoundId(r.getRoundId());
             int totalGroups = groupRepository.findByRound_RoundId(r.getRoundId()).size();
-            return roundMapper.toSummaryDTO(r, participants, Map.of(),
-                    totalGroups, userId, isManager);
+            Map<Integer, Long> answeredByUser = buildAnsweredByUserMap(r.getRoundId());
+
+            String callerRole = determineCallerRole(r, userId, participants);
+            boolean isManager = "SR_QA".equals(callerRole);
+
+            return roundMapper.toSummaryDTO(r, participants, answeredByUser,
+                    totalGroups, userId, callerRole, isManager);
         }).toList();
     }
 
@@ -316,13 +333,23 @@ public class CalibrationService {
                 .orElseThrow(() -> new EntityNotFoundException(
                         "Calibration round with ID %d not found".formatted(roundId)));
 
-        User user = findUser(userId);
-        boolean isManager = isQaManager(userId);
-
         List<CalibrationGroup> groups =
                 groupRepository.findByRoundIdWithSessions(roundId);
         List<CalibrationParticipant> participants =
                 participantRepository.findByRound_RoundId(roundId);
+
+        String callerRole = determineCallerRole(round, userId, participants);
+
+        // Non-enrolled non-managers cannot access the round
+        if ("PARTICIPANT".equals(callerRole) || "EXPERT".equals(callerRole)
+                || "CREATOR".equals(callerRole)) {
+            boolean isEnrolled = participants.stream()
+                    .anyMatch(p -> p.getUser().getUserId().equals(userId));
+            if (!isEnrolled) {
+                throw new IllegalStateException(
+                        "You are not enrolled in this calibration round.");
+            }
+        }
 
         CalibrationParticipant expertParticipant = participants.stream()
                 .filter(p -> Boolean.TRUE.equals(p.getIsExpert()))
@@ -336,45 +363,70 @@ public class CalibrationService {
 
         Map<Integer, Long> answeredByUser = buildAnsweredByUserMap(roundId);
 
-        if (isManager) {
+        if ("SR_QA".equals(callerRole)) {
+            boolean managerParticipant = participants.stream()
+                    .anyMatch(p -> p.getUser().getUserId().equals(userId));
             return roundMapper.toDTOForManager(round, groups, participants,
-                    expertSessions, answeredByUser);
+                    expertSessions, answeredByUser, managerParticipant, userId);
         }
 
-        boolean isEnrolled = participants.stream()
-                .anyMatch(p -> p.getUser().getUserId().equals(userId));
-        if (!isEnrolled) {
-            throw new IllegalStateException(
-                    "You are not enrolled in this calibration round.");
-        }
+        // CREATOR, EXPERT, PARTICIPANT — all get the participant view
+        // callerRole is passed through so the frontend can differentiate
         return roundMapper.toDTOForParticipant(round, groups, participants,
-                expertSessions, answeredByUser, userId);
+                expertSessions, answeredByUser, userId, callerRole);
+    }
+
+    // ── Role determination ────────────────────────────────────
+
+    /**
+     * Determines the caller's functional role in a specific round.
+     *
+     * <p>Priority order:</p>
+     * <ol>
+     *   <li>SR_QA — caller is the direct manager of the round creator</li>
+     *   <li>CREATOR — caller created the round</li>
+     *   <li>EXPERT — caller is the designated expert participant</li>
+     *   <li>PARTICIPANT — caller is enrolled but none of the above</li>
+     * </ol>
+     */
+    private String determineCallerRole(CalibrationRound round,
+                                       Integer callerId,
+                                       List<CalibrationParticipant> participants) {
+        Integer creatorId  = round.getCreatedBy().getUserId();
+        User    creator    = findUser(creatorId);
+
+        // SR_QA: caller is the direct manager of the creator
+        if (creator.getManager() != null
+                && creator.getManager().getUserId().equals(callerId)) {
+            return "SR_QA";
+        }
+
+        // Creator
+        if (creatorId.equals(callerId)) return "CREATOR";
+
+        // Expert
+        boolean isExpert = participants.stream()
+                .anyMatch(p -> p.getUser().getUserId().equals(callerId)
+                        && Boolean.TRUE.equals(p.getIsExpert()));
+        if (isExpert) return "EXPERT";
+
+        return "PARTICIPANT";
     }
 
     // ── Round name generation ─────────────────────────────────
 
-    /**
-     * Generates an auto-formatted round name.
-     * Format: {@code {clientAbbr}-{protocolAbbr}-{CAT}-{YYMM}-{SEQ}}
-     * Example: {@code DSV-DSP-BUS-2604-001}
-     *
-     * <p>The sequence number is 1-based within the same
-     * client + protocol + category + period combination.</p>
-     *
-     * @throws IllegalArgumentException if either abbreviation is missing.
-     */
     private String generateRoundName(Client client, AuditProtocol protocol,
                                      String category, LocalDateTime now) {
         if (client.getClientAbbreviation() == null
                 || client.getClientAbbreviation().isBlank()) {
             throw new IllegalArgumentException(
-                    "Client '%s' has no abbreviation set. Add it in Settings before creating a calibration round."
+                    "Client '%s' has no abbreviation set."
                             .formatted(client.getClientName()));
         }
         if (protocol.getProtocolAbbreviation() == null
                 || protocol.getProtocolAbbreviation().isBlank()) {
             throw new IllegalArgumentException(
-                    "Protocol '%s' has no abbreviation set. Add it to the protocol before creating a calibration round."
+                    "Protocol '%s' has no abbreviation set."
                             .formatted(protocol.getProtocolName()));
         }
 
@@ -387,7 +439,7 @@ public class CalibrationService {
                     : category.toUpperCase();
         };
 
-        String period = now.format(PERIOD_FORMAT); // e.g. "2604"
+        String period = now.format(PERIOD_FORMAT);
 
         long existing = roundRepository.countByClientAndProtocolAndCategoryAndPeriod(
                 client.getClientId(),
@@ -425,11 +477,6 @@ public class CalibrationService {
 
     private Department getDepartment(User user) {
         return user.getRole() != null ? user.getRole().getDepartment() : null;
-    }
-
-    private boolean isQaManager(Integer userId) {
-        List<Integer> subordinates = userRepository.findAllSubordinateIds(userId);
-        return !subordinates.isEmpty();
     }
 
     private Map<Integer, Long> buildAnsweredByUserMap(Long roundId) {

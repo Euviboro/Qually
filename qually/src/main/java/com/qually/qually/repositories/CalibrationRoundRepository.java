@@ -46,16 +46,13 @@ public interface CalibrationRoundRepository extends JpaRepository<CalibrationRou
     List<CalibrationRound> findAllWithDetails();
 
     @Query("""
-        SELECT r FROM CalibrationRound r
-        JOIN FETCH r.client
-        JOIN FETCH r.protocol
-        JOIN FETCH r.question
-        JOIN FETCH r.createdBy
-        LEFT JOIN FETCH r.groups g
-        LEFT JOIN FETCH r.participants p
-        LEFT JOIN FETCH p.user
-        WHERE r.roundId = :roundId
-    """)
+    SELECT r FROM CalibrationRound r
+    JOIN FETCH r.client
+    JOIN FETCH r.protocol
+    JOIN FETCH r.question
+    JOIN FETCH r.createdBy
+    WHERE r.roundId = :roundId
+""")
     Optional<CalibrationRound> findByIdWithDetails(@Param("roundId") Long roundId);
 
     /**

@@ -8,23 +8,19 @@ import org.springframework.stereotype.Component;
 
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
-import java.util.stream.Collectors;
 
 /**
  * Maps {@link CalibrationRound} entities to {@link CalibrationRoundResponseDTO}.
  *
- * <p>Two mapping paths:</p>
+ * <p>Mapping paths:</p>
  * <ul>
- *   <li>{@link #toDTOForManager} — full visibility: all sessions, expert
- *       identity exposed on participants, expert answers shown after close.</li>
- *   <li>{@link #toDTOForParticipant} — restricted visibility: only the
- *       caller's own sessions, expert identity hidden, expert answer shown
- *       only after the round closes.</li>
+ *   <li>{@link #toSummaryDTO}        — list view, no session detail.</li>
+ *   <li>{@link #toDTOForManager}     — SR_QA full view. If also a participant,
+ *       caller's own sessions are included via participant path.</li>
+ *   <li>{@link #toDTOForParticipant} — PARTICIPANT, EXPERT, and CREATOR.
+ *       Creator receives the same data but the frontend uses {@code callerRole}
+ *       to additionally render the participant completion list.</li>
  * </ul>
- *
- * <p>For the list view (no groups needed), use {@link #toSummaryDTO} which
- * omits groups and participant sessions for performance.</p>
  */
 @Component
 public class CalibrationRoundMapper {
@@ -35,22 +31,21 @@ public class CalibrationRoundMapper {
         this.groupMapper = groupMapper;
     }
 
+    // ── List view ─────────────────────────────────────────────
+
     /**
-     * Summary DTO for the rounds list — no groups or session detail.
-     * Used for both manager and participant list views.
+     * Summary DTO for the rounds list — no group or session detail.
      *
-     * @param round          The round entity.
-     * @param participants   All enrolled participants.
-     * @param answeredByUser Map of userId → count of groups answered.
-     * @param totalGroups    Total number of groups in the round.
-     * @param callerId       The calling user's ID.
-     * @param isManager      Whether the caller is a QA manager.
+     * @param callerRole     SR_QA / CREATOR / EXPERT / PARTICIPANT
+     * @param isManager      Whether to expose isExpert on participants
+     *                       (true for SR_QA).
      */
     public CalibrationRoundResponseDTO toSummaryDTO(CalibrationRound round,
                                                     List<CalibrationParticipant> participants,
                                                     Map<Integer, Long> answeredByUser,
                                                     int totalGroups,
                                                     Integer callerId,
+                                                    String callerRole,
                                                     boolean isManager) {
         return CalibrationRoundResponseDTO.builder()
                 .roundId(round.getRoundId())
@@ -66,36 +61,44 @@ public class CalibrationRoundMapper {
                 .isCalibrated(round.getIsCalibrated())
                 .createdByName(round.getCreatedBy().getFullName())
                 .createdAt(round.getCreatedAt())
-                .participants(toParticipantDTOs(participants, answeredByUser, totalGroups, isManager))
+                .callerRole(callerRole)
+                .isManagerParticipant(false)
+                .participants(toParticipantDTOs(participants, answeredByUser,
+                        totalGroups, isManager))
                 .groups(null)
                 .callerAnsweredCount(answeredByUser.getOrDefault(callerId, 0L).intValue())
                 .totalGroupCount(totalGroups)
                 .build();
     }
 
+    // ── Detail: SR_QA ─────────────────────────────────────────
+
     /**
-     * Full detail DTO for a QA manager — all sessions and participant
-     * identity fully visible.
+     * Full detail DTO for SR_QA. All participants' answers visible, expert
+     * identified.
      *
-     * @param round          The round entity with groups and participants loaded.
-     * @param groups         Groups with sessions loaded.
-     * @param participants   All enrolled participants.
-     * @param expertSessions All sessions submitted by the expert.
-     * @param answeredByUser Map of userId → count of groups answered.
+     * <p>When the SR_QA is also a participant ({@code isManagerParticipant=true}),
+     * the frontend renders a participant section above the manager section.
+     * The participant section is built from this same response — the frontend
+     * filters by {@code userId === caller.userId} in the sessions lists.</p>
+     *
+     * @param isManagerParticipant true when caller is both SR_QA and enrolled
+     * @param callerId             the SR_QA's userId — needed for callerAnsweredCount
      */
     public CalibrationRoundResponseDTO toDTOForManager(CalibrationRound round,
                                                        List<CalibrationGroup> groups,
                                                        List<CalibrationParticipant> participants,
                                                        List<CalibrationSession> expertSessions,
-                                                       Map<Integer, Long> answeredByUser) {
+                                                       Map<Integer, Long> answeredByUser,
+                                                       boolean isManagerParticipant,
+                                                       Integer callerId) {
         boolean roundOpen = Boolean.TRUE.equals(round.getIsOpen());
         Map<Long, String> expertAnswerMap =
                 groupMapper.buildExpertAnswerMap(groups, expertSessions);
 
         List<CalibrationGroupResponseDTO> groupDTOs = groups.stream()
                 .map(g -> groupMapper.toDTOForManager(
-                        g,
-                        roundOpen ? null : expertAnswerMap.get(g.getGroupId())))
+                        g, roundOpen ? null : expertAnswerMap.get(g.getGroupId())))
                 .toList();
 
         return CalibrationRoundResponseDTO.builder()
@@ -112,41 +115,43 @@ public class CalibrationRoundMapper {
                 .isCalibrated(round.getIsCalibrated())
                 .createdByName(round.getCreatedBy().getFullName())
                 .createdAt(round.getCreatedAt())
+                .callerRole("SR_QA")
+                .isManagerParticipant(isManagerParticipant)
                 .groups(groupDTOs)
                 .participants(toParticipantDTOs(participants, answeredByUser,
                         groups.size(), true))
-                .callerAnsweredCount(null)
+                .callerAnsweredCount(answeredByUser.getOrDefault(callerId, 0L).intValue())
                 .totalGroupCount(groups.size())
                 .build();
     }
 
+    // ── Detail: CREATOR / EXPERT / PARTICIPANT ────────────────
+
     /**
-     * Full detail DTO for a participant — only their own sessions visible,
-     * expert identity hidden.
+     * Detail DTO for CREATOR, EXPERT, and PARTICIPANT.
      *
-     * @param round          The round entity.
-     * @param groups         Groups with sessions loaded.
-     * @param participants   All enrolled participants.
-     * @param expertSessions All sessions submitted by the expert.
-     * @param answeredByUser Map of userId → count of groups answered.
-     * @param callerId       The calling participant's user ID.
+     * <p>Groups show only the caller's own session. Expert answer revealed
+     * after round closes. Participants list included with completion progress
+     * but without isExpert — the frontend uses {@code callerRole} to decide
+     * whether to render the participants section (CREATOR sees it,
+     * PARTICIPANT and EXPERT do not).</p>
+     *
+     * @param callerRole CREATOR / EXPERT / PARTICIPANT
      */
     public CalibrationRoundResponseDTO toDTOForParticipant(CalibrationRound round,
                                                            List<CalibrationGroup> groups,
                                                            List<CalibrationParticipant> participants,
                                                            List<CalibrationSession> expertSessions,
                                                            Map<Integer, Long> answeredByUser,
-                                                           Integer callerId) {
+                                                           Integer callerId,
+                                                           String callerRole) {
         boolean roundOpen = Boolean.TRUE.equals(round.getIsOpen());
         Map<Long, String> expertAnswerMap =
                 groupMapper.buildExpertAnswerMap(groups, expertSessions);
 
         List<CalibrationGroupResponseDTO> groupDTOs = groups.stream()
                 .map(g -> groupMapper.toDTOForParticipant(
-                        g,
-                        callerId,
-                        expertAnswerMap.get(g.getGroupId()),
-                        roundOpen))
+                        g, callerId, expertAnswerMap.get(g.getGroupId()), roundOpen))
                 .toList();
 
         return CalibrationRoundResponseDTO.builder()
@@ -163,6 +168,8 @@ public class CalibrationRoundMapper {
                 .isCalibrated(round.getIsCalibrated())
                 .createdByName(round.getCreatedBy().getFullName())
                 .createdAt(round.getCreatedAt())
+                .callerRole(callerRole)
+                .isManagerParticipant(false)
                 .groups(groupDTOs)
                 .participants(toParticipantDTOs(participants, answeredByUser,
                         groups.size(), false))
@@ -178,7 +185,6 @@ public class CalibrationRoundMapper {
             Map<Integer, Long> answeredByUser,
             int totalGroups,
             boolean isManager) {
-
         return participants.stream()
                 .map(p -> {
                     long answered = answeredByUser.getOrDefault(
@@ -188,7 +194,6 @@ public class CalibrationRoundMapper {
                             .fullName(p.getUser().getFullName())
                             .roleName(p.getUser().getRole() != null
                                     ? p.getUser().getRole().getRoleName() : null)
-                            // isExpert only visible to managers
                             .isExpert(isManager ? p.getIsExpert() : null)
                             .hasAnsweredAll(answered == totalGroups)
                             .answeredCount((int) answered)

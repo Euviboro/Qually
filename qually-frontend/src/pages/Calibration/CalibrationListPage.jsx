@@ -1,16 +1,19 @@
 /**
  * @module pages/Calibration/CalibrationListPage
  *
- * Lists all calibration rounds visible to the current user.
- * QA Specialists see rounds they are enrolled in.
- * QA Managers see all rounds in their management chain with a Close button.
+ * Uses callerRole from the backend to determine what each user sees:
+ * - SR_QA / CREATOR: group progress (participant completion pills)
+ * - EXPERT / PARTICIPANT: own progress only
+ * - OPERATIONS with no rounds: "not assigned" message, no Add button
+ * - Button: "Open" for all roles
+ * - "Close Calibration" button for SR_QA only
  */
 
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAsync } from "../../hooks/useAsync";
 import { getRounds, closeAndCompare } from "../../api/calibration";
 import { useAuth } from "../../context/AuthContext";
-import { useState } from "react";
 
 const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 
@@ -20,34 +23,26 @@ function formatDate(raw) {
   return `${MONTHS[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`;
 }
 
-// ── Status badge ──────────────────────────────────────────────
-
 function StatusBadge({ isOpen, isCalibrated }) {
-  if (isOpen) {
-    return (
-      <span className="text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-full bg-warning-surface text-warning-text">
-        Open
-      </span>
-    );
-  }
-  if (isCalibrated === true) {
-    return (
-      <span className="text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-full bg-success-surface text-success-on">
-        Calibrated
-      </span>
-    );
-  }
+  if (isOpen) return (
+    <span className="text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-full bg-warning-surface text-warning-text">
+      Open
+    </span>
+  );
+  if (isCalibrated === true) return (
+    <span className="text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-full bg-success-surface text-success-on">
+      Calibrated
+    </span>
+  );
   return (
     <span className="text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-full bg-error-surface text-error-on">
-      Not Calibrated
+      Needs Calibration
     </span>
   );
 }
 
-// ── Progress bar ──────────────────────────────────────────────
-
 function ProgressPill({ answered, total }) {
-  const pct = total > 0 ? Math.round((answered / total) * 100) : 0;
+  const pct  = total > 0 ? Math.round((answered / total) * 100) : 0;
   const done = answered === total && total > 0;
   return (
     <div className="flex items-center gap-2">
@@ -62,25 +57,15 @@ function ProgressPill({ answered, total }) {
   );
 }
 
-// ── Page ──────────────────────────────────────────────────────
-
 export default function CalibrationListPage() {
   const navigate = useNavigate();
-  const { user } = useAuth();
-  const [closing, setClosing] = useState(null);
+  const { isQA } = useAuth();
+  const [closing,    setClosing]    = useState(null);
   const [closeError, setCloseError] = useState(null);
 
   const { data: rounds = [], loading, error, refetch } = useAsync(
     () => getRounds(),
     []
-  );
-
-  // Determine if the user is a manager based on whether any round
-  // shows isExpert as non-null for a participant (only managers get that)
-  // A simpler check: manager if they see rounds they didn't create as enrolled
-  // We use the presence of isExpert=true/false in participants as a signal
-  const isManager = rounds.some(r =>
-    r.participants?.some(p => p.isExpert !== null && p.isExpert !== undefined)
   );
 
   const handleClose = async (roundId) => {
@@ -105,6 +90,25 @@ export default function CalibrationListPage() {
 
   if (error) return <div className="p-8 text-error-on">{error}</div>;
 
+  // OPERATIONS users with no assigned rounds
+  if (!isQA && rounds.length === 0) {
+    return (
+      <div className="px-6 py-8 max-w-full">
+        <header className="mb-6">
+          <h1 className="text-2xl font-bold text-text-pri tracking-tight">Calibration</h1>
+        </header>
+        <div className="text-center py-20 bg-bg-primary rounded-xl border-2 border-dashed border-border-sec">
+          <p className="text-text-ter font-medium">
+            You have not been assigned to any calibration rounds.
+          </p>
+          <p className="text-text-ter text-sm mt-1">
+            Your QA team will notify you when a round is ready.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="px-6 py-8 max-w-full">
       <header className="flex items-center justify-between mb-6">
@@ -114,15 +118,17 @@ export default function CalibrationListPage() {
             {rounds.length} round{rounds.length !== 1 ? "s" : ""}
           </p>
         </div>
-        <button
-          onClick={() => navigate("/calibration/new")}
-          className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-white bg-lsg-blue hover:bg-lsg-blue-dark rounded-md transition-colors"
-        >
-          <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-            <path d="M6 1v10M1 6h10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
-          </svg>
-          New Round
-        </button>
+        {isQA && (
+          <button
+            onClick={() => navigate("/calibration/new")}
+            className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-white bg-lsg-blue hover:bg-lsg-blue-dark rounded-md transition-colors"
+          >
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+              <path d="M6 1v10M1 6h10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+            </svg>
+            New Round
+          </button>
+        )}
       </header>
 
       {closeError && (
@@ -134,19 +140,23 @@ export default function CalibrationListPage() {
       {rounds.length === 0 ? (
         <div className="text-center py-20 bg-bg-primary rounded-xl border-2 border-dashed border-border-sec">
           <p className="text-text-ter font-medium">No calibration rounds yet.</p>
-          <button
-            onClick={() => navigate("/calibration/new")}
-            className="mt-3 text-sm text-lsg-blue hover:underline"
-          >
-            Create the first round →
-          </button>
+          {isQA && (
+            <button
+              onClick={() => navigate("/calibration/new")}
+              className="mt-3 text-sm text-lsg-blue hover:underline"
+            >
+              Create the first round →
+            </button>
+          )}
         </div>
       ) : (
         <div className="flex flex-col gap-3">
           {rounds.map((round) => {
+            const callerRole = round.callerRole;  // SR_QA | CREATOR | EXPERT | PARTICIPANT
+            const showGroup  = callerRole === "SR_QA" || callerRole === "CREATOR";
+            const isSrQa     = callerRole === "SR_QA";
             const myAnswered = round.callerAnsweredCount ?? 0;
             const total      = round.totalGroupCount ?? 0;
-            const allDone    = myAnswered === total && total > 0;
 
             return (
               <div
@@ -155,41 +165,27 @@ export default function CalibrationListPage() {
               >
                 <div className="flex items-start justify-between gap-4">
                   <div className="flex-1 min-w-0">
+
                     {/* Round name + status */}
-                    <div className="flex items-center gap-2.5 mb-1 flex-wrap">
+                    <div className="flex items-center gap-2.5 flex-wrap mb-1">
                       <span className="font-mono text-sm font-bold text-text-pri tracking-wide">
                         {round.roundName}
                       </span>
                       <StatusBadge isOpen={round.isOpen} isCalibrated={round.isCalibrated} />
                     </div>
 
-                    {/* Meta */}
-                    <p className="text-xs text-text-ter mb-3">
+                    <p className="text-xs text-text-ter mb-2">
                       {round.clientName} · {round.protocolName} · {formatDate(round.createdAt)}
                     </p>
 
-                    {/* Question */}
                     <p className="text-sm text-text-sec mb-3 line-clamp-2">
                       <span className="font-medium text-text-ter mr-1.5">Q:</span>
                       {round.questionText}
                     </p>
 
-                    {/* Progress — only for open rounds */}
-                    {round.isOpen && (
-                      <div className="flex items-center gap-2">
-                        <span className="text-[11px] text-text-ter">Your progress:</span>
-                        <ProgressPill answered={myAnswered} total={total} />
-                        {allDone && (
-                          <span className="text-[11px] text-success-on font-bold">
-                            ✓ All answered
-                          </span>
-                        )}
-                      </div>
-                    )}
-
-                    {/* Manager: participant summary */}
-                    {isManager && round.participants && (
-                      <div className="mt-2 flex items-center gap-1.5 flex-wrap">
+                    {/* SR_QA / CREATOR: participant completion pills */}
+                    {showGroup && round.isOpen && round.participants && (
+                      <div className="flex flex-wrap gap-1.5">
                         {round.participants.map((p) => (
                           <span
                             key={p.userId}
@@ -202,9 +198,22 @@ export default function CalibrationListPage() {
                             ].join(" ")}
                           >
                             {p.fullName.split(" ")[0]}
-                            {p.isExpert && " ★"}
+                            {p.isExpert === true && " ★"}
                           </span>
                         ))}
+                      </div>
+                    )}
+
+                    {/* PARTICIPANT / EXPERT: own progress */}
+                    {!showGroup && round.isOpen && (
+                      <div className="flex items-center gap-2">
+                        <span className="text-[11px] text-text-ter">Your progress:</span>
+                        <ProgressPill answered={myAnswered} total={total} />
+                        {myAnswered === total && total > 0 && (
+                          <span className="text-[11px] text-success-on font-bold">
+                            ✓ All answered
+                          </span>
+                        )}
                       </div>
                     )}
                   </div>
@@ -215,17 +224,17 @@ export default function CalibrationListPage() {
                       onClick={() => navigate(`/calibration/${round.roundId}`)}
                       className="px-3.5 py-1.5 text-xs font-bold text-lsg-blue border border-lsg-blue rounded-md hover:bg-bg-accent transition-colors whitespace-nowrap"
                     >
-                      {round.isOpen ? "Answer →" : "View Results →"}
+                      Open →
                     </button>
 
-                    {/* Close button — manager only, open rounds only */}
-                    {isManager && round.isOpen && (
+                    {/* Close Calibration — SR_QA only, open rounds only */}
+                    {isSrQa && round.isOpen && (
                       <button
                         onClick={() => handleClose(round.roundId)}
                         disabled={closing === round.roundId}
                         className="px-3.5 py-1.5 text-xs font-bold text-white bg-lsg-navy hover:bg-lsg-midnight rounded-md transition-colors disabled:opacity-50 whitespace-nowrap"
                       >
-                        {closing === round.roundId ? "Closing…" : "Close Round"}
+                        {closing === round.roundId ? "Closing…" : "Close Calibration"}
                       </button>
                     )}
                   </div>

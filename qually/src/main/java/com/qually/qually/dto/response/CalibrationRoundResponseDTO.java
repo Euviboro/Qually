@@ -9,12 +9,22 @@ import java.util.List;
 /**
  * Full response for a calibration round.
  *
- * <p>Used for both the list view (where {@code groups} may be omitted
- * for performance) and the detail view (where everything is included).</p>
+ * <p>{@code callerRole} tells the frontend exactly how to render the page
+ * without re-deriving it from other fields:</p>
+ * <ul>
+ *   <li>{@code SR_QA}      — direct manager of the round creator. Sees all
+ *       participants' answers, has Close Calibration button.</li>
+ *   <li>{@code CREATOR}    — QA Specialist who created the round. Sees own
+ *       answers + participant completion list (no other answers).</li>
+ *   <li>{@code EXPERT}     — the designated expert. Answers like a regular
+ *       participant — no special UI treatment.</li>
+ *   <li>{@code PARTICIPANT} — everyone else enrolled in the round.</li>
+ * </ul>
  *
- * <p>What participants see vs. what QA managers see is controlled by the
- * service layer before mapping — this DTO carries whatever the service
- * decides to expose.</p>
+ * <p>{@code isManagerParticipant} is {@code true} only when the caller is
+ * {@code SR_QA} AND is also enrolled as a participant. In that case the
+ * detail page renders two sections: their participant section and the
+ * full manager section.</p>
  */
 @Getter
 @Builder
@@ -29,41 +39,28 @@ public class CalibrationRoundResponseDTO {
     private Integer       questionId;
     private String        questionText;
     private String        category;
-
-    /**
-     * Whether the round is still accepting answers.
-     * {@code true} — open, answers can be submitted.
-     * {@code false} — closed, results are finalised.
-     */
     private Boolean       isOpen;
-
-    /**
-     * Overall calibration result.
-     * {@code null} — round still open.
-     * {@code true} — all participants passed all interactions.
-     * {@code false} — at least one failure.
-     */
     private Boolean       isCalibrated;
-
     private String        createdByName;
     private LocalDateTime createdAt;
 
     /**
-     * Interaction groups — populated in the detail view.
-     * {@code null} or empty in the list view for performance.
+     * The caller's role in this round — one of SR_QA, CREATOR, EXPERT, PARTICIPANT.
+     * Set by the service before mapping. Never null for enrolled users.
      */
-    private List<CalibrationGroupResponseDTO> groups;
+    private String callerRole;
 
     /**
-     * Enrolled participants — populated in the detail view.
-     * {@code isExpert} on each participant is only visible to QA managers.
+     * True when the caller is SR_QA AND is also enrolled as a participant.
+     * Signals the detail page to render both a participant section and a
+     * manager section.
      */
+    private Boolean isManagerParticipant;
+
+    private List<CalibrationGroupResponseDTO>       groups;
     private List<CalibrationParticipantResponseDTO> participants;
 
-    /**
-     * Convenience field — how many interactions the current caller
-     * has already answered. Derived in the service layer.
-     */
+    /** How many interactions the caller has answered. Null in manager-only view. */
     private Integer callerAnsweredCount;
     private Integer totalGroupCount;
 }

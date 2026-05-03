@@ -6,6 +6,7 @@ import com.qually.qually.models.CalibrationGroup;
 import com.qually.qually.models.CalibrationSession;
 import org.springframework.stereotype.Component;
 
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -99,9 +100,10 @@ public class CalibrationGroupMapper {
                         s -> s.getGroup().getGroupId(),
                         CalibrationSession::getCalibrationAnswer));
 
-        return groups.stream()
-                .collect(Collectors.toMap(
-                        CalibrationGroup::getGroupId,
-                        g -> expertByGroup.getOrDefault(g.getGroupId(), null)));
+        Map<Long, String> result = new HashMap<>();
+        for (CalibrationGroup g : groups) {
+            result.put(g.getGroupId(), expertByGroup.get(g.getGroupId())); // null allowed in HashMap
+        }
+        return result;
     }
 }
