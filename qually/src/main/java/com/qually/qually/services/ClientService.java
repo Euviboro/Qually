@@ -29,12 +29,11 @@ public class ClientService {
 
     @Transactional
     public ClientResponseDTO createClient(ClientRequestDTO dto) {
-        clientRepository.findByClientName(dto.getClientName())
-                .ifPresent(existing -> {
-                    log.warn("Duplicate client name '{}' rejected", dto.getClientName());
-                    throw new IllegalArgumentException(
-                            "A client named '%s' already exists".formatted(dto.getClientName()));
-                });
+        if (clientRepository.existsByClientName(dto.getClientName())) {
+            log.warn("Duplicate client name '{}' rejected", dto.getClientName());
+            throw new IllegalArgumentException(
+                    "A client named '%s' already exists".formatted(dto.getClientName()));
+        }
 
         Client saved = clientRepository.save(clientMapper.toEntity(dto));
         log.info("Client {} '{}' created", saved.getClientId(), saved.getClientName());

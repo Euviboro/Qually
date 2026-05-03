@@ -30,17 +30,6 @@ public interface CalibrationRoundRepository extends JpaRepository<CalibrationRou
         JOIN FETCH r.protocol
         JOIN FETCH r.question
         JOIN FETCH r.createdBy
-        WHERE r.client.clientId IN :clientIds
-        ORDER BY r.createdAt DESC
-    """)
-    List<CalibrationRound> findByClientIds(@Param("clientIds") List<Integer> clientIds);
-
-    @Query("""
-        SELECT r FROM CalibrationRound r
-        JOIN FETCH r.client
-        JOIN FETCH r.protocol
-        JOIN FETCH r.question
-        JOIN FETCH r.createdBy
         ORDER BY r.createdAt DESC
     """)
     List<CalibrationRound> findAllWithDetails();

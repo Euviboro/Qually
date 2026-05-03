@@ -13,8 +13,6 @@ import java.util.Optional;
 public interface CalibrationSessionRepository
         extends JpaRepository<CalibrationSession, Long> {
 
-    List<CalibrationSession> findByGroup_GroupId(Long groupId);
-
     /**
      * All sessions for every group in a round.
      * Used by closeAndCompare alongside

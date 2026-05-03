@@ -9,5 +9,5 @@ import java.util.List;
 
 @Repository
 public interface SubattributeOptionRepository extends JpaRepository<SubattributeOption, Long> {
-    List<SubattributeOption> findBySubattribute_SubattributeId(Integer subattributeId);
+
 }

@@ -61,10 +61,6 @@ public interface UserRepository extends JpaRepository<User, Integer> {
     """)
     List<User> findEligibleCalibrationParticipants(@Param("clientId") Integer clientId);
 
-    List<User> findByManager_UserId(Integer managerId);
-
-    List<User> findByFullNameContainingIgnoreCase(String fullName);
-
     @Query(value = """
         WITH RECURSIVE subordinates AS (
             SELECT user_id FROM users WHERE manager_id = :userId

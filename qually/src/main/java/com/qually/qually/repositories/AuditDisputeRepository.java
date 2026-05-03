@@ -12,8 +12,6 @@ import java.util.Optional;
 @Repository
 public interface AuditDisputeRepository extends JpaRepository<AuditDispute, Integer> {
 
-    Optional<AuditDispute> findByResponse_AuditResponseId(Long responseId);
-
     /**
      * Finds all disputes for a given session by joining through audit_responses.
      * Used to check whether all disputes for a session are resolved.

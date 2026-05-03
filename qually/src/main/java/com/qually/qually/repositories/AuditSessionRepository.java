@@ -36,8 +36,6 @@ public interface AuditSessionRepository extends JpaRepository<AuditSession, Long
 
     List<AuditSession> findByAuditor_UserId(Integer userId);
 
-    List<AuditSession> findByMemberAuditedUser_UserId(Integer userId);
-
     // ── JOIN FETCH queries for ResultsService ─────────────────
 
     @Query(
