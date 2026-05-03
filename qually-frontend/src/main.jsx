@@ -8,24 +8,20 @@ import { ErrorBoundary } from "./components/ErrorBoundary";
 import { RequireAuth, RequirePinChanged, RequireQA, IndexRedirect } from "./router/guards";
 import "./index.css";
 
-const DashboardPage          = lazy(() => import("./pages/Dashboard/DashboardPage"));
-const NewProtocolPage        = lazy(() => import("./pages/NewProtocol/NewProtocolPage"));
-const ShowProtocolPage       = lazy(() => import("./pages/ShowProtocol/ShowProtocolPage"));
-const LogSessionPage         = lazy(() => import("./pages/LogSession/LogSessionPage"));
-const DraftsPage             = lazy(() => import("./pages/Drafts/DraftsPage"));
-const SessionResultsPage     = lazy(() => import("./pages/SessionResults/SessionResultsPage"));
-const ResultsPage            = lazy(() => import("./pages/Results/ResultsPage"));
-const DisputesPage           = lazy(() => import("./pages/Disputes/DisputesPage"));
-const SettingsPage           = lazy(() => import("./pages/Settings/SettingsPage"));
-const LoginPage              = lazy(() => import("./pages/Login/LoginPage"));
-const ChangePinPage          = lazy(() => import("./pages/ChangePin/ChangePinPage"));
-const CalibrationListPage    = lazy(() => import("./pages/Calibration/CalibrationListPage"));
-const CreateCalibrationPage  = lazy(() => import("./pages/Calibration/CreateCalibrationPage"));
-
-
-
-
-
+const DashboardPage         = lazy(() => import("./pages/Dashboard/DashboardPage"));
+const NewProtocolPage       = lazy(() => import("./pages/NewProtocol/NewProtocolPage"));
+const ShowProtocolPage      = lazy(() => import("./pages/ShowProtocol/ShowProtocolPage"));
+const LogSessionPage        = lazy(() => import("./pages/LogSession/LogSessionPage"));
+const DraftsPage            = lazy(() => import("./pages/Drafts/DraftsPage"));
+const SessionResultsPage    = lazy(() => import("./pages/SessionResults/SessionResultsPage"));
+const ResultsPage           = lazy(() => import("./pages/Results/ResultsPage"));
+const DisputesPage          = lazy(() => import("./pages/Disputes/DisputesPage"));
+const SettingsPage          = lazy(() => import("./pages/Settings/SettingsPage"));
+const LoginPage             = lazy(() => import("./pages/Login/LoginPage"));
+const ChangePinPage         = lazy(() => import("./pages/ChangePin/ChangePinPage"));
+const CalibrationListPage   = lazy(() => import("./pages/Calibration/CalibrationListPage"));
+const CreateCalibrationPage = lazy(() => import("./pages/Calibration/CreateCalibrationPage"));
+const CalibrationDetailPage = lazy(() => import("./pages/Calibration/CalibrationDetailPage"));
 
 const router = createBrowserRouter([
   {
@@ -60,20 +56,21 @@ const router = createBrowserRouter([
           { index: true, element: <IndexRedirect /> },
 
           // QA-only routes
-          { path: "protocols/new",    element: <RequireQA><NewProtocolPage /></RequireQA> },
-          { path: "protocols/:id",    element: <RequireQA><ShowProtocolPage /></RequireQA> },
-          { path: "sessions/log",     element: <RequireQA><LogSessionPage /></RequireQA> },
-          { path: "drafts",           element: <RequireQA><DraftsPage /></RequireQA> },
-          { path: "calibration",      element: <RequireQA><CalibrationListPage /></RequireQA> },
-          { path: "calibration/new",  element: <RequireQA><CreateCalibrationPage /></RequireQA> },
+          { path: "protocols/new",   element: <RequireQA><NewProtocolPage /></RequireQA> },
+          { path: "protocols/:id",   element: <RequireQA><ShowProtocolPage /></RequireQA> },
+          { path: "sessions/log",    element: <RequireQA><LogSessionPage /></RequireQA> },
+          { path: "drafts",          element: <RequireQA><DraftsPage /></RequireQA> },
+          { path: "calibration",     element: <RequireQA><CalibrationListPage /></RequireQA> },
+          { path: "calibration/new", element: <RequireQA><CreateCalibrationPage /></RequireQA> },
+          { path: "calibration/:id", element: <RequireQA><CalibrationDetailPage /></RequireQA> },
 
           // Shared routes
-          { path: "sessions/:id",     element: <SessionResultsPage /> },
-          { path: "results",          element: <ResultsPage /> },
-          { path: "disputes",         element: <DisputesPage /> },
+          { path: "sessions/:id",    element: <SessionResultsPage /> },
+          { path: "results",         element: <ResultsPage /> },
+          { path: "disputes",        element: <DisputesPage /> },
 
           // QA-only settings
-          { path: "settings/users",   element: <RequireQA><SettingsPage /></RequireQA> },
+          { path: "settings/users",  element: <RequireQA><SettingsPage /></RequireQA> },
         ],
       },
     ],
