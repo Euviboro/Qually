@@ -73,7 +73,7 @@ export const AUDIT_LOGIC_TYPE_META = {
  */
 export const CLIENT_ACCENT_COLORS = [
   { bg: "var(--color-copc-customer-bg)",    text: "var(--color-copc-customer-text)",    dot: "var(--color-copc-customer-dot)"    },
-  { bg: "var(--color-background-accent)",   text: "var(--lsg-trust-navy-mid)",          dot: "var(--lsg-lean-blue-dark)"         },
+  { bg: "var(--color-background-accent)",   text: "var(--lsg-trust-navy-mid)",          dot: "var(--lsg-momentum-blue)"         },
   { bg: "var(--color-copc-business-bg)",    text: "var(--color-copc-business-text)",    dot: "var(--color-copc-business-dot)"    },
   { bg: "var(--color-copc-compliance-bg)",  text: "var(--color-copc-compliance-text)",  dot: "var(--color-copc-compliance-dot)"  },
   { bg: "var(--color-background-tertiary)", text: "var(--color-text-secondary)",        dot: "var(--color-text-tertiary)"        },

@@ -7,14 +7,24 @@
    ============================================================ */
 :root {
   /* LSG Primary Palette */
-  --lsg-lean-blue:       #0096FF;
-  --lsg-lean-blue-dark:  #006EF4;
+  --lsg-lean-blue:       #0099FF;
+  --lsg-momentum-blue:  #006EF2;
   --lsg-lean-blue-light: #E6F4FF;
-  --lsg-trust-navy:      #002F65;
+  --lsg-trust-navy:      #002E66;
   --lsg-trust-navy-mid:  #003D84;
-  --lsg-midnight:        #001E4B;
-  --lsg-orange:          #FF8021;
+  --lsg-midnight:        #001F38;
+  --lsg-orange:          #FF8221;
   --lsg-orange-light:    #FFF0E6;
+
+  /* LSG Accent Tones*/
+  --lsg-solar-orange:         #FF8221;
+  --lsg-solar-orange-night:   #450D0A;
+  --lsg-aqua-breeze:          #ABE8E5;
+  --lsg-aqua-breeze-night:    #0A3847;
+  --lsg-lavender-mist:        #A3A6FA;
+  --lsg-lavender-mist-night:  #170A46;
+  --lsg-sandstone:            #D6D1BD;
+  --lsg-sandstone-night:      #452E0A;
 
   /* Semantic Surface Tokens */
   --color-background-primary:    #FFFFFF;
@@ -37,10 +47,10 @@
 
   /* Interactive / Action Tokens */
   --color-action-primary:        var(--lsg-lean-blue);
-  --color-action-primary-hover:  var(--lsg-lean-blue-dark);
+  --color-action-primary-hover:  var(--lsg-momentum-blue);
   --color-action-primary-text:   #FFFFFF;
   --color-action-secondary-bg:   var(--lsg-lean-blue-light);
-  --color-action-secondary-text: var(--lsg-lean-blue-dark);
+  --color-action-secondary-text: var(--lsg-momentum-blue);
 
   /* Status Colors */
   --color-success-bg:   #E1F5EE;
@@ -72,10 +82,10 @@
   --border-radius-pill: 999px;
 
   /* Shadows */
-  --shadow-sm:   0 1px 3px rgba(0, 47, 101, 0.07);
-  --shadow-md:   0 4px 12px rgba(0, 47, 101, 0.10);
-  --shadow-lg:   0 8px 24px rgba(0, 47, 101, 0.14);
-  --shadow-card: 0 2px 8px rgba(0, 47, 101, 0.08);
+  --shadow-sm:   0 1px 3px rgba(0, 46, 102, 0.07);
+  --shadow-md:   0 4px 12px rgba(0, 46, 102, 0.10);
+  --shadow-lg:   0 8px 24px rgba(0, 46, 102, 0.14);
+  --shadow-card: 0 2px 8px rgba(0, 46, 102, 0.08);
 
   /* Transitions */
   --transition-fast: 0.15s ease;
@@ -95,7 +105,7 @@
 @theme {
   /* Colors — generates bg-*, text-*, border-* utilities */
   --color-lsg-blue:         var(--lsg-lean-blue);
-  --color-lsg-blue-dark:    var(--lsg-lean-blue-dark);
+  --color-lsg-blue-dark:    var(--lsg-momentum-blue);
   --color-lsg-blue-light:   var(--lsg-lean-blue-light);
   --color-lsg-navy:         var(--lsg-trust-navy);
   --color-lsg-navy-mid:     var(--lsg-trust-navy-mid);
