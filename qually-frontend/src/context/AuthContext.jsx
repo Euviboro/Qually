@@ -1,75 +1,65 @@
 /**
  * @module context/AuthContext
  *
- * Authentication context for Qually.
+ * Authentication context for Qually — OAuth2 / Microsoft Entra ID edition.
  *
- * Tokens are stored in httpOnly cookies managed by the browser — not in
- * localStorage. This context stores only the UserResponseDTO (display data)
- * in localStorage for persistence across page refreshes.
+ * On startup the context calls GET /api/auth/me to check whether the browser
+ * already has a valid access_token cookie (set by the backend after OAuth2 login).
+ * If the cookie is present and valid, the user is hydrated silently. If not,
+ * any protected route will redirect to /login.
  *
- * Logout calls POST /api/auth/logout to clear the server-side cookies, then
- * clears local state. The context also listens for the "qually:logout" custom
- * event dispatched by apiClient when a 401 cannot be recovered — this ensures
- * the user is logged out from anywhere in the app when their session expires.
+ * Login is initiated by navigating to /oauth2/authorization/azure — the browser
+ * goes to Microsoft, authenticates, and the backend sets the cookie on return.
+ * No credentials are handled in JavaScript.
  *
- * Replace this context with Azure AD / MSAL when Microsoft Auth is available.
- * The rest of the app uses only the values exposed here, so the swap is
- * isolated to this file and LoginPage.
+ * Logout calls POST /api/auth/logout to clear the httpOnly cookies, then
+ * redirects to /login. The context also listens for the "qually:logout" event
+ * dispatched by apiClient on unrecoverable 401s.
  */
 
-import { createContext, useContext, useState, useCallback, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import {
+  createContext,
+  useContext,
+  useState,
+  useCallback,
+  useEffect,
+} from "react";
 
 const AuthContext = createContext(null);
 
-function readPersistedUser() {
-  try {
-    const raw = localStorage.getItem("qually_user");
-    return raw ? JSON.parse(raw) : null;
-  } catch {
-    return null;
-  }
-}
-
 export function AuthProvider({ children }) {
-  const [user, setUser] = useState(readPersistedUser);
+  const [user,    setUser]    = useState(null);
+  const [loading, setLoading] = useState(true); // true while /me is in flight
 
-  /**
-   * Called after a successful POST /api/auth/login.
-   * Stores the UserResponseDTO — tokens are already in cookies.
-   *
-   * @param {import('../api/users').UserResponseDTO} userDto
-   */
-  const login = useCallback((userDto) => {
-    setUser(userDto);
-    localStorage.setItem("qually_user", JSON.stringify(userDto));
+  // ── Hydrate on startup ─────────────────────────────────────
+  useEffect(() => {
+    fetch(`${import.meta.env.VITE_API_BASE}/auth/me`, {
+      credentials: "include",
+    })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => setUser(data))
+      .catch(() => setUser(null))
+      .finally(() => setLoading(false));
   }, []);
 
-  /**
-   * Clears the session: calls POST /api/auth/logout to clear httpOnly cookies,
-   * then removes the persisted user from localStorage.
-   */
+  // ── Logout ─────────────────────────────────────────────────
   const logout = useCallback(async () => {
     try {
       await fetch(`${import.meta.env.VITE_API_BASE}/auth/logout`, {
         method:      "POST",
         credentials: "include",
-        headers:     { "Content-Type": "application/json" },
       });
     } catch {
-      // Swallow — even if the server call fails, clear local state
+      // Swallow — clear local state regardless
     }
     setUser(null);
-    localStorage.removeItem("qually_user");
+    window.location.href = "/login";
   }, []);
 
-  // Listen for the global logout event dispatched by apiClient
-  // when a 401 cannot be recovered (expired refresh token or invalid token).
+  // ── Global 401 listener ────────────────────────────────────
   useEffect(() => {
     const handler = () => {
       setUser(null);
-      localStorage.removeItem("qually_user");
-      // Redirect to login — use window.location since we may be outside Router
       window.location.href = "/login";
     };
     window.addEventListener("qually:logout", handler);
@@ -80,15 +70,13 @@ export function AuthProvider({ children }) {
   const isOperations = user?.department === "OPERATIONS";
 
   return (
-    <AuthContext.Provider value={{ user, login, logout, isQA, isOperations }}>
+    <AuthContext.Provider value={{ user, loading, logout, isQA, isOperations }}>
       {children}
     </AuthContext.Provider>
   );
 }
 
-/**
- * @returns {{ user, login, logout, isQA, isOperations }}
- */
+/** @returns {{ user, loading, logout, isQA, isOperations }} */
 export function useAuth() {
   const ctx = useContext(AuthContext);
   if (!ctx) throw new Error("useAuth must be used inside <AuthProvider>");

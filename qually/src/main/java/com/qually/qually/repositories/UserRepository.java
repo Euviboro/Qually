@@ -71,4 +71,7 @@ public interface UserRepository extends JpaRepository<User, Integer> {
         SELECT user_id FROM subordinates
         """, nativeQuery = true)
     List<Integer> findAllSubordinateIds(@Param("userId") Integer userId);
+
+    @Query("SELECT u FROM User u LEFT JOIN FETCH u.role WHERE u.userEmail = :email")
+    Optional<User> findByUserEmailWithRole(@Param("email") String email);
 }

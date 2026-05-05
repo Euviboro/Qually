@@ -1,11 +1,11 @@
 import React, { lazy, Suspense } from "react";
 import ReactDOM from "react-dom/client";
-import { createBrowserRouter, RouterProvider, Outlet, Navigate } from "react-router-dom";
+import { createBrowserRouter, RouterProvider, Outlet } from "react-router-dom";
 import { AppShell } from "./components/layout/AppShell";
-import { AuthProvider, useAuth } from "./context/AuthContext";
+import { AuthProvider } from "./context/AuthContext";
 import { PageSpinner } from "./components/ui/PageSpinner";
 import { ErrorBoundary } from "./components/ErrorBoundary";
-import { RequireAuth, RequirePinChanged, RequireQA, IndexRedirect } from "./router/guards";
+import { RequireAuth, RequireQA, IndexRedirect } from "./router/guards";
 import "./index.css";
 
 const DashboardPage         = lazy(() => import("./pages/Dashboard/DashboardPage"));
@@ -18,7 +18,6 @@ const ResultsPage           = lazy(() => import("./pages/Results/ResultsPage"));
 const DisputesPage          = lazy(() => import("./pages/Disputes/DisputesPage"));
 const SettingsPage          = lazy(() => import("./pages/Settings/SettingsPage"));
 const LoginPage             = lazy(() => import("./pages/Login/LoginPage"));
-const ChangePinPage         = lazy(() => import("./pages/ChangePin/ChangePinPage"));
 const CalibrationListPage   = lazy(() => import("./pages/Calibration/CalibrationListPage"));
 const CreateCalibrationPage = lazy(() => import("./pages/Calibration/CreateCalibrationPage"));
 const CalibrationDetailPage = lazy(() => import("./pages/Calibration/CalibrationDetailPage"));
@@ -29,20 +28,10 @@ const router = createBrowserRouter([
     element: <Suspense fallback={<PageSpinner />}><LoginPage /></Suspense>,
   },
   {
-    path: "/change-pin",
-    element: (
-      <RequireAuth>
-        <Suspense fallback={<PageSpinner />}><ChangePinPage /></Suspense>
-      </RequireAuth>
-    ),
-  },
-  {
     path: "/",
     element: (
       <RequireAuth>
-        <RequirePinChanged>
-          <ErrorBoundary><AppShell /></ErrorBoundary>
-        </RequirePinChanged>
+        <ErrorBoundary><AppShell /></ErrorBoundary>
       </RequireAuth>
     ),
     children: [

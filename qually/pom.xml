@@ -22,8 +22,6 @@
 
     <properties>
         <java.version>21</java.version>
-        <jjwt.version>0.12.5</jjwt.version>
-        <bucket4j.version>8.10.1</bucket4j.version>
     </properties>
 
     <dependencies>
@@ -48,30 +46,37 @@
             <artifactId>spring-boot-starter-security</artifactId>
         </dependency>
 
+        <!-- ── OAuth2 Client (Microsoft Entra ID) ────────────── -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-oauth2-client</artifactId>
+        </dependency>
+
         <!-- ── JWT (JJWT) ────────────────────────────────────── -->
+        <!--
+            Kept intentionally: JwtService and JwtFilter are still used to
+            issue and validate the access_token httpOnly cookie after OAuth2
+            login. The only thing that changed is HOW the token is issued —
+            Microsoft authenticates the user, then we mint our own JWT from
+            the matched DB user. This lets the rest of the app (all API calls)
+            work exactly as before without touching a single controller.
+        -->
         <dependency>
             <groupId>io.jsonwebtoken</groupId>
             <artifactId>jjwt-api</artifactId>
-            <version>${jjwt.version}</version>
+            <version>0.12.5</version>
         </dependency>
         <dependency>
             <groupId>io.jsonwebtoken</groupId>
             <artifactId>jjwt-impl</artifactId>
-            <version>${jjwt.version}</version>
+            <version>0.12.5</version>
             <scope>runtime</scope>
         </dependency>
         <dependency>
             <groupId>io.jsonwebtoken</groupId>
             <artifactId>jjwt-jackson</artifactId>
-            <version>${jjwt.version}</version>
+            <version>0.12.5</version>
             <scope>runtime</scope>
-        </dependency>
-
-        <!-- ── Rate limiting (Bucket4j) ──────────────────────── -->
-        <dependency>
-            <groupId>com.bucket4j</groupId>
-            <artifactId>bucket4j-core</artifactId>
-            <version>${bucket4j.version}</version>
         </dependency>
 
         <!-- ── Database ──────────────────────────────────────── -->

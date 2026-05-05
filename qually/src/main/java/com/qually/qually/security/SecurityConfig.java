@@ -1,6 +1,7 @@
 package com.qually.qually.security;
 
 import jakarta.servlet.http.HttpServletResponse;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -13,66 +14,57 @@ import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.web.cors.CorsConfigurationSource;
 
-/**
- * Spring Security configuration for Qually.
- *
- * <p>Key decisions:</p>
- * <ul>
- *   <li>Stateless session — no HttpSession created or used.</li>
- *   <li>CSRF disabled — {@code SameSite=Strict} on the {@code access_token}
- *       cookie is the CSRF defense. The browser will never send the cookie
- *       on cross-site requests, eliminating the attack vector entirely.
- *       This is the OWASP-recommended approach for SPAs with same-site
- *       cookie deployment. No CSRF token required.</li>
- *   <li>JWT validation delegated to {@link JwtFilter}.</li>
- *   <li>All 401 and 403 responses return JSON — no HTML redirects.</li>
- *   <li>Security headers enforced for public-facing deployment.</li>
- * </ul>
- *
- * <p>Replace this class when Microsoft Auth arrives — swap the JWT filter
- * for an OAuth2 resource server configuration. Everything else in the app
- * remains unchanged.</p>
- */
 @Configuration
 @EnableWebSecurity
 public class SecurityConfig {
 
-    private final JwtFilter jwtFilter;
+    private final JwtFilter               jwtFilter;
     private final CorsConfigurationSource corsConfigurationSource;
+    private final CustomOAuth2UserService oAuth2UserService;
+    private final OAuthSuccessHandler     oAuthSuccessHandler;
+
+    @Value("${app.frontend.url}")
+    private String frontendUrl;
 
     public SecurityConfig(JwtFilter jwtFilter,
-                          CorsConfigurationSource corsConfigurationSource) {
-        this.jwtFilter               = jwtFilter;
+                          CorsConfigurationSource corsConfigurationSource,
+                          CustomOAuth2UserService oAuth2UserService,
+                          OAuthSuccessHandler oAuthSuccessHandler) {
+        this.jwtFilter             = jwtFilter;
         this.corsConfigurationSource = corsConfigurationSource;
+        this.oAuth2UserService     = oAuth2UserService;
+        this.oAuthSuccessHandler   = oAuthSuccessHandler;
     }
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
 
         http
-                // ── Session — stateless ───────────────────────────
                 .sessionManagement(session -> session
-                        .sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                        .sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED))
 
-                // ── CORS ──────────────────────────────────────────
                 .cors(cors -> cors.configurationSource(corsConfigurationSource))
-
-                // ── CSRF — disabled ───────────────────────────────
-                // SameSite=Strict on the access_token cookie prevents the browser
-                // from sending it on any cross-site request, making CSRF impossible.
-                // No token-based CSRF protection is needed for same-site SPA deployments.
                 .csrf(csrf -> csrf.disable())
 
-                // ── Endpoint authorization ────────────────────────
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
-                        .requestMatchers("/api/auth/**").permitAll()
+                        .requestMatchers("/api/auth/me", "/api/auth/logout").permitAll()
+                        .requestMatchers("/oauth2/**", "/login/**").permitAll()
                         .anyRequest().authenticated())
 
-                // ── JWT filter ────────────────────────────────────
+                .oauth2Login(oauth2 -> oauth2
+                        .loginPage(frontendUrl + "/login")
+                        .userInfoEndpoint(userInfo -> userInfo
+                                // oidcUserService — not userService — because Azure AD
+                                // returns an OIDC token (openid scope). Spring routes
+                                // OIDC providers through OidcUserService, not
+                                // DefaultOAuth2UserService.
+                                .oidcUserService(oAuth2UserService))
+                        .successHandler(oAuthSuccessHandler)
+                        .failureUrl(frontendUrl + "/login?error=true"))
+
                 .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class)
 
-                // ── Security response headers ─────────────────────
                 .headers(headers -> headers
                         .contentTypeOptions(content -> {})
                         .frameOptions(frame -> frame.deny())
@@ -89,14 +81,17 @@ public class SecurityConfig {
                                                 "connect-src 'self'; " +
                                                 "frame-ancestors 'none'")))
 
-                // ── Exception handling — JSON only ────────────────
                 .exceptionHandling(ex -> ex
                         .authenticationEntryPoint((request, response, authException) -> {
-                            response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
-                            response.setContentType("application/json");
-                            response.getWriter().write(
-                                    "{\"status\":401,\"code\":\"UNAUTHORIZED\"," +
-                                            "\"message\":\"Authentication required\"}");
+                            if (request.getRequestURI().startsWith("/api/")) {
+                                response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+                                response.setContentType("application/json");
+                                response.getWriter().write(
+                                        "{\"status\":401,\"code\":\"UNAUTHORIZED\"," +
+                                                "\"message\":\"Authentication required\"}");
+                            } else {
+                                response.sendRedirect("/oauth2/authorization/azure");
+                            }
                         })
                         .accessDeniedHandler((request, response, accessDeniedException) -> {
                             response.setStatus(HttpServletResponse.SC_FORBIDDEN);
@@ -112,11 +107,6 @@ public class SecurityConfig {
         return http.build();
     }
 
-    /**
-     * BCrypt password encoder — work factor 12.
-     * Injected into {@link com.qually.qually.controllers.AuthController}
-     * and {@link com.qually.qually.services.UserService}.
-     */
     @Bean
     public PasswordEncoder passwordEncoder() {
         return new BCryptPasswordEncoder(12);

@@ -1,66 +1,47 @@
 /**
  * @module pages/Login/LoginPage
  *
- * Email + PIN login page.
- * Calls POST /api/auth/login, stores the UserResponseDTO in AuthContext,
- * then redirects to the dashboard or /change-pin if forcePinChange is true.
+ * Login page — Microsoft Entra ID edition.
+ *
+ * The only action is navigating to /oauth2/authorization/azure.
+ * Spring Security handles the redirect to Microsoft, the token exchange,
+ * the DB lookup, and setting the access_token cookie. When the browser
+ * returns to the frontend root, AuthContext re-fetches /api/auth/me.
+ *
+ * The ?error=true query param is set by Spring when OAuth2 fails
+ * (e.g. email not in Qually, account inactive). We surface a message in that case.
  */
 
-import { useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { useAuth } from "../../context/AuthContext";
-import { usePeek } from "../../hooks/usePeek";
+import { useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
+
+const BACKEND = import.meta.env.VITE_API_BASE.replace("/api", "");
+
+const ERROR_MESSAGES = {
+  user_not_registered:
+    "Your Microsoft account is not registered in Qually. Contact your QA Director to be added.",
+  user_inactive:
+    "Your Qually account is inactive. Contact your QA Director.",
+  email_not_found:
+    "Your Microsoft account did not return an email address. Contact your IT team.",
+  true: "Authentication failed. Please try again or contact support.",
+};
 
 export default function LoginPage() {
-  const { login } = useAuth();
-  const navigate  = useNavigate();
+  const [searchParams] = useSearchParams();
+  const [error, setError] = useState(null);
 
-  const [email,    setEmail]    = useState("");
-  const [pin,      setPin]      = useState("");
-  const [loading,  setLoading]  = useState(false);
-  const [error,    setError]    = useState(null);
-  const [peekPin, peekPinHandlers] = usePeek();
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    if (!email.trim() || !pin.trim()) {
-      setError("Email and PIN are required.");
-      return;
+  useEffect(() => {
+    const errorParam = searchParams.get("error");
+    if (errorParam) {
+      setError(ERROR_MESSAGES[errorParam] ?? ERROR_MESSAGES.true);
     }
+  }, [searchParams]);
 
-    setLoading(true);
-    setError(null);
-
-    try {
-      const res = await fetch(`${import.meta.env.VITE_API_BASE}/auth/login`, {
-        method:      "POST",
-        credentials: "include",          // receive httpOnly cookies
-        headers:     { "Content-Type": "application/json" },
-        body:        JSON.stringify({ email: email.trim().toLowerCase(), pin }),
-      });
-
-      const data = await res.json();
-
-      if (!res.ok) {
-        setError(data.message ?? "Invalid email or PIN.");
-        return;
-      }
-
-      // Store display data in AuthContext — tokens are in cookies
-      login(data);
-
-      // Redirect based on forcePinChange flag
-      if (data.forcePinChange) {
-        navigate("/change-pin", { replace: true });
-      } else {
-        navigate("/", { replace: true });
-      }
-
-    } catch {
-      setError("Could not reach the server. Please try again.");
-    } finally {
-      setLoading(false);
-    }
+  const handleSignIn = () => {
+    // Navigate the full browser window — not a fetch call.
+    // Spring Security initiates the OAuth2 redirect from here.
+    window.location.href = `${BACKEND}/oauth2/authorization/azure`;
   };
 
   return (
@@ -79,75 +60,28 @@ export default function LoginPage() {
           <p className="text-sm text-text-ter mt-1">by Lean Solutions Group</p>
         </div>
 
-        <form onSubmit={handleSubmit} className="flex flex-col gap-5">
-          <div>
-            <label className="block text-xs font-bold text-text-sec uppercase tracking-wider mb-1.5">
-              Email
-            </label>
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="you@company.com"
-              autoComplete="email"
-              autoFocus
-              className="w-full px-3 py-2.5 text-sm rounded-md border border-border-sec bg-bg-primary text-text-pri placeholder:text-text-ter outline-none focus:border-lsg-blue transition-all"
-            />
+        {error && (
+          <div className="mb-5 px-4 py-3 bg-error-surface border border-[rgba(226,75,74,0.2)] text-error-on text-sm rounded-xl">
+            {error}
           </div>
+        )}
 
-          <div>
-            <label className="block text-xs font-bold text-text-sec uppercase tracking-wider mb-1.5">
-              PIN
-            </label>
-            <div className="relative">
-              <input
-                type={peekPin ? "text" : "password"}
-                value={pin}
-                onChange={(e) => setPin(e.target.value)}
-                placeholder="Enter your PIN"
-                autoComplete="current-password"
-                className="w-full px-3 py-2.5 pr-10 text-sm rounded-md border border-border-sec bg-bg-primary text-text-pri placeholder:text-text-ter outline-none focus:border-lsg-blue transition-all"
-              />
-              <button
-                type="button"
-                {...peekPinHandlers}
-                tabIndex={-1}
-                aria-label="Hold to reveal PIN"
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-text-ter hover:text-text-sec transition-colors select-none"
-              >
-                {peekPin ? (
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
-                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
-                    <circle cx="12" cy="12" r="3"/>
-                  </svg>
-                ) : (
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
-                    <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/>
-                    <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/>
-                    <line x1="1" y1="1" x2="23" y2="23"/>
-                  </svg>
-                )}
-              </button>
-            </div>
-          </div>
-
-          {error && (
-            <p className="text-xs text-error-on bg-error-surface px-3 py-2 rounded-lg">
-              {error}
-            </p>
-          )}
-
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full py-2.5 text-sm font-bold text-white bg-lsg-blue hover:bg-lsg-blue-dark rounded-md transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-          >
-            {loading ? "Signing in…" : "Sign In"}
-          </button>
-        </form>
+        <button
+          onClick={handleSignIn}
+          className="w-full flex items-center justify-center gap-3 py-2.5 px-4 text-sm font-bold text-text-pri bg-bg-primary hover:bg-bg-secondary border border-border-sec rounded-md transition-all shadow-sm"
+        >
+          {/* Microsoft logo */}
+          <svg width="20" height="20" viewBox="0 0 21 21" fill="none">
+            <rect x="1"  y="1"  width="9" height="9" fill="#F25022"/>
+            <rect x="11" y="1"  width="9" height="9" fill="#7FBA00"/>
+            <rect x="1"  y="11" width="9" height="9" fill="#00A4EF"/>
+            <rect x="11" y="11" width="9" height="9" fill="#FFB900"/>
+          </svg>
+          Sign in with Microsoft
+        </button>
 
         <p className="text-center text-xs text-text-ter mt-6">
-          Your PIN is your first name. Change it after logging in.
+          Use your Lean Solutions Group Microsoft account.
         </p>
       </div>
     </div>
