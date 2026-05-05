@@ -19,5 +19,13 @@ public class SubattributeRequestDTO {
     @NotNull(message = "Question ID is required", groups = OnIndividualSave.class)
     private Integer questionId;
 
+    /**
+     * Marks this subattribute as the accountability selector.
+     * At most one subattribute per question should have this set to {@code true}.
+     * Ignored in STANDARD protocols; required for accountability scoring in
+     * ACCOUNTABILITY protocols.
+     */
+    private boolean isAccountabilitySubattribute;
+
     private List<SubattributeOptionRequestDTO> subattributeOptions;
 }

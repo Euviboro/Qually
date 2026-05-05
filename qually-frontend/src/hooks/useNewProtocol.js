@@ -1,6 +1,6 @@
 /** @module hooks/useNewProtocol */
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { getClients } from "../api/clients";
 import { createProtocol } from "../api/protocols";
@@ -14,19 +14,23 @@ export const EMPTY_QUESTION = () => ({
   subattributes: [],
 });
 
-/** @returns {LocalSubattribute} */
+/**
+ * @returns {LocalSubattribute}
+ *
+ * Options are objects { label, isCompanyAccountable } instead of plain strings.
+ * isAccountabilitySubattribute marks this subattribute as the accountability selector —
+ * at most one per question is allowed in ACCOUNTABILITY protocols.
+ */
 export const EMPTY_ATTRIBUTE = () => ({
   id: crypto.randomUUID(),
   subattributeText: "",
-  subattributeOptions: ["", ""],
+  isAccountabilitySubattribute: false,
+  subattributeOptions: [
+    { label: "", isCompanyAccountable: false },
+    { label: "", isCompanyAccountable: false },
+  ],
 });
 
-/**
- * Manages all state for the New Protocol form.
- *
- * `protocolAbbreviation` added — optional field used in calibration
- * round name generation. Can be set later by editing the protocol.
- */
 export function useNewProtocol() {
   const navigate = useNavigate();
 
@@ -48,12 +52,39 @@ export function useNewProtocol() {
       .finally(() => setClientsLoading(false));
   }, []);
 
-  const canSave =
+  const isAccountabilityMode = auditLogicType === "ACCOUNTABILITY";
+
+  // Base requirement: client set, name filled, logic type chosen, all questions confirmed
+  const baseCanSave =
     !!clientId &&
     !!protocolName.trim() &&
     !!auditLogicType &&
     questions.length > 0 &&
     questions.every((q) => q.confirmed);
+
+  /**
+   * For ACCOUNTABILITY protocols: every confirmed question must have exactly one
+   * subattribute marked as the accountability selector before the protocol can
+   * be finalized. Drafts are exempt — this only blocks the Finalize button.
+   *
+   * Returns an array of 1-based question numbers that are missing the flag.
+   * Empty array means the protocol is ready to finalize.
+   */
+  const accountabilityFinalizeErrors = useMemo(() => {
+    if (!isAccountabilityMode || !baseCanSave) return [];
+
+    return questions
+      .map((q, i) => {
+        const count = (q.subattributes ?? []).filter(
+          (s) => s.isAccountabilitySubattribute
+        ).length;
+        return count === 1 ? null : i + 1;
+      })
+      .filter(Boolean);
+  }, [isAccountabilityMode, baseCanSave, questions]);
+
+  const canSave     = baseCanSave;
+  const canFinalize = baseCanSave && accountabilityFinalizeErrors.length === 0;
 
   const updateQuestion = (id, updated) =>
     setQuestions((qs) => qs.map((q) => (q.id === id ? updated : q)));
@@ -81,8 +112,12 @@ export function useNewProtocol() {
         questionText: q.questionText,
         category:     q.category,
         subattributes: q.subattributes.map((a) => ({
-          subattributeText:    a.subattributeText,
-          subattributeOptions: a.subattributeOptions.map((opt) => ({ optionLabel: opt })),
+          subattributeText:             a.subattributeText,
+          isAccountabilitySubattribute: a.isAccountabilitySubattribute,
+          subattributeOptions: a.subattributeOptions.map((opt) => ({
+            optionLabel:          opt.label,
+            isCompanyAccountable: opt.isCompanyAccountable,
+          })),
         })),
       })),
     };
@@ -103,9 +138,12 @@ export function useNewProtocol() {
     protocolAbbreviation, setProtocolAbbreviation,
     version,              setVersion,
     auditLogicType,       setAuditLogicType,
+    isAccountabilityMode,
     questions,
     clients,              clientsLoading,
-    canSave,              saving,         saveError,
+    canSave,              canFinalize,
+    accountabilityFinalizeErrors,
+    saving,               saveError,
     updateQuestion,       removeQuestion, addQuestion,
     handleSave,
   };

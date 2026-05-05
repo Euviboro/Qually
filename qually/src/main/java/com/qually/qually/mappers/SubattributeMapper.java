@@ -21,7 +21,9 @@ public class SubattributeMapper {
         return SubattributeResponseDTO.builder()
                 .subattributeId(subattribute.getSubattributeId())
                 .subattributeText(subattribute.getSubattributeText())
-                .subattributeOptions(subattribute.getSubattributeOptions() != null ? subattribute.getSubattributeOptions().stream()
+                .isAccountabilitySubattribute(subattribute.isAccountability())
+                .subattributeOptions(subattribute.getSubattributeOptions() != null
+                        ? subattribute.getSubattributeOptions().stream()
                         .map(optionMapper::toDTO)
                         .toList()
                         : new ArrayList<>())
@@ -32,10 +34,11 @@ public class SubattributeMapper {
         if (dto == null) return null;
 
         Subattribute subattribute = Subattribute.builder()
-            .subattributeText(dto.getSubattributeText())
-            .auditQuestion(parent)
-            .subattributeOptions(new ArrayList<>())
-            .build();
+                .subattributeText(dto.getSubattributeText())
+                .isAccountability(dto.isAccountabilitySubattribute())
+                .auditQuestion(parent)
+                .subattributeOptions(new ArrayList<>())
+                .build();
 
         if (dto.getSubattributeOptions() != null) {
             dto.getSubattributeOptions().forEach(oDto ->

@@ -9,20 +9,24 @@ import org.springframework.stereotype.Component;
 @Component
 public class SubattributeOptionMapper {
 
-    public SubattributeOptionResponseDTO toDTO(SubattributeOption subattributeOption){
+    public SubattributeOptionResponseDTO toDTO(SubattributeOption subattributeOption) {
         return SubattributeOptionResponseDTO.builder()
                 .subattributeOptionId(subattributeOption.getSubattributeOptionId())
+                .subattributeId(subattributeOption.getSubattribute() != null
+                        ? subattributeOption.getSubattribute().getSubattributeId()
+                        : null)
                 .optionLabel(subattributeOption.getOptionLabel())
+                .isCompanyAccountable(subattributeOption.isCompanyAccountable())
                 .build();
     }
 
-    public SubattributeOption toEntity(SubattributeOptionRequestDTO dto, Subattribute parent){
+    public SubattributeOption toEntity(SubattributeOptionRequestDTO dto, Subattribute parent) {
         if (dto == null) return null;
 
         return SubattributeOption.builder()
                 .subattribute(parent)
                 .optionLabel(dto.getOptionLabel())
+                .isCompanyAccountable(dto.isCompanyAccountable())
                 .build();
     }
-
 }

@@ -56,36 +56,78 @@ function AnswerToggle({ value, onChange }) {
   );
 }
 
-function SubattributePanel({ subattributes, selectedOptions, onOptionSelect }) {
+function SubattributePanel({ subattributes, selectedOptions, onOptionSelect, isAccountabilityMode }) {
   if (!subattributes || subattributes.length === 0) return null;
+ 
   return (
     <div className="mt-4 pt-4 border-t border-border-ter space-y-5">
       <p className="text-[10px] font-bold text-text-ter uppercase tracking-widest">Sub-criteria</p>
-      {subattributes.map((sub) => (
-        <div key={sub.subattributeId} className="pl-4 border-l-2 border-border-ter">
-          <p className="text-sm font-medium text-text-sec mb-3">{sub.subattributeText}</p>
-          <div className="flex flex-wrap gap-2">
-            {sub.subattributeOptions?.map((opt) => {
-              const isSelected = opt.subattributeOptionId === selectedOptions[sub.subattributeId];
-              return (
-                <button
-                  key={opt.subattributeOptionId}
-                  type="button"
-                  onClick={() => onOptionSelect(sub.subattributeId, opt.subattributeOptionId)}
-                  className={[
-                    "px-3.5 py-1.5 text-[11px] font-bold rounded-full border transition-all uppercase tracking-wide",
-                    isSelected
-                      ? "bg-lsg-blue text-white border-transparent"
-                      : "border-border-sec text-text-ter hover:border-lsg-blue hover:text-lsg-blue",
-                  ].join(" ")}
-                >
-                  {opt.optionLabel}
-                </button>
-              );
-            })}
+ 
+      {subattributes.map((sub) => {
+        const isAccountabilitySub = isAccountabilityMode && sub.isAccountabilitySubattribute;
+        const hasSelection = selectedOptions[sub.subattributeId] != null;
+ 
+        return (
+          <div
+            key={sub.subattributeId}
+            className={[
+              "pl-4 border-l-2",
+              isAccountabilitySub
+                ? hasSelection
+                  ? "border-lsg-blue"
+                  : "border-warning-text"
+                : "border-border-ter",
+            ].join(" ")}
+          >
+            {/* Label row */}
+            <div className="flex items-center gap-2 mb-3">
+              <p className="text-sm font-medium text-text-sec">{sub.subattributeText}</p>
+              {isAccountabilitySub && (
+                <span className="text-[9px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded-full bg-lsg-blue/10 text-lsg-blue border border-lsg-blue/20">
+                  Accountability {!hasSelection && "·  required"}
+                </span>
+              )}
+            </div>
+ 
+            {/* Option chips */}
+            <div className="flex flex-wrap gap-2">
+              {sub.subattributeOptions?.map((opt) => {
+                const isSelected = opt.subattributeOptionId === selectedOptions[sub.subattributeId];
+ 
+                // Company-accountable options get a warning tint when unselected
+                // so the auditor knows this choice will count against the score.
+                const unselectedClass = isAccountabilitySub && opt.isCompanyAccountable
+                  ? "border-warning-text/40 text-warning-text hover:border-warning-text hover:bg-warning-surface"
+                  : "border-border-sec text-text-ter hover:border-lsg-blue hover:text-lsg-blue";
+ 
+                const selectedClass = isSelected
+                  ? isAccountabilitySub && opt.isCompanyAccountable
+                    ? "bg-warning-surface text-warning-text border-warning-text"
+                    : "bg-lsg-blue text-white border-transparent"
+                  : unselectedClass;
+ 
+                return (
+                  <button
+                    key={opt.subattributeOptionId}
+                    type="button"
+                    onClick={() => onOptionSelect(sub.subattributeId, opt.subattributeOptionId)}
+                    className={[
+                      "px-3.5 py-1.5 text-[11px] font-bold rounded-full border transition-all uppercase tracking-wide",
+                      selectedClass,
+                    ].join(" ")}
+                  >
+                    {opt.optionLabel}
+                    {/* Dot indicator for company-accountable options */}
+                    {isAccountabilitySub && opt.isCompanyAccountable && (
+                      <span className="ml-1 opacity-60">●</span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
           </div>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }
@@ -358,6 +400,7 @@ export default function LogSessionPage() {
                       subattributes={q.subattributes}
                       selectedOptions={qAnswer?.subattributes ?? {}}
                       onOptionSelect={(subId, optId) => setSubattributeAnswer(q.questionId, subId, optId)}
+                      isAccountabilityMode={isAccountabilityMode}
                     />
                   )}
                 </div>

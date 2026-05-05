@@ -40,6 +40,7 @@ export default function ShowProtocolPage() {
   const [isEditingName,    setIsEditingName]    = useState(false);
   const [editedName,       setEditedName]       = useState("");
   const [isSavingName,     setIsSavingName]     = useState(false);
+  const [finalizeError, setFinalizeError] = useState(null);
 
   // ── Name handlers ──────────────────────────────────────────
 
@@ -120,12 +121,37 @@ export default function ShowProtocolPage() {
   // ── Finalize handler ───────────────────────────────────────
 
   const handleFinalize = async () => {
+    // Client-side pre-flight for ACCOUNTABILITY protocols —
+    // gives immediate feedback without a round-trip.
+    if (protocol.auditLogicType === "ACCOUNTABILITY") {
+      const offenders = (protocol.auditQuestions ?? [])
+        .map((q, i) => {
+          const count = (q.subattributes ?? []).filter(
+            (s) => s.isAccountabilitySubattribute
+          ).length;
+          return count === 1 ? null : i + 1;
+        })
+        .filter(Boolean);
+  
+      if (offenders.length > 0) {
+        setFinalizeError(
+          `Cannot finalize: question${offenders.length > 1 ? "s" : ""} ${offenders.join(", ")} ` +
+          `need${offenders.length === 1 ? "s" : ""} an accountability subattribute marked. ` +
+          `Edit the question${offenders.length > 1 ? "s" : ""} and mark one subattribute as the accountability selector.`
+        );
+        return;
+      }
+    }
+  
     if (window.confirm("Once finalized, you cannot edit these questions or the protocol name. Continue?")) {
+      setFinalizeError(null);
       try {
         await finalizeProtocol(id);
         refetch();
       } catch (err) {
-        alert("Error finalizing protocol: " + err.message);
+        // Surface the backend's message — it will be the accountability validation
+        // error text if the pre-flight somehow passed but the server rejected it.
+        setFinalizeError(err.message ?? "Error finalizing protocol. Please try again.");
       }
     }
   };
@@ -294,6 +320,22 @@ export default function ShowProtocolPage() {
           </div>
         </div>
       </header>
+
+      {finalizeError && (
+        <div className="mb-6 px-4 py-3 bg-error-surface border border-[rgba(226,75,74,0.2)] text-error-on text-sm rounded-xl flex items-start gap-3">
+          <svg className="shrink-0 mt-0.5" width="16" height="16" viewBox="0 0 16 16" fill="none">
+            <circle cx="8" cy="8" r="7" stroke="currentColor" strokeWidth="1.5"/>
+            <path d="M8 5v3.5M8 11h.01" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+          </svg>
+          <span>{finalizeError}</span>
+          <button
+            onClick={() => setFinalizeError(null)}
+            className="ml-auto shrink-0 text-error-on/60 hover:text-error-on transition-colors"
+          >
+            ✕
+          </button>
+        </div>
+      )}
 
       {/* ── Questions toolbar (DRAFT only) ───────────────────── */}
       {isDraft && (

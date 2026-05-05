@@ -42,6 +42,8 @@ export function useLogSession(protocol, auditorUserId, existingSession = null) {
 
   // ── Answer state ───────────────────────────────────────────
 
+  const isAccountabilityMode = protocol?.auditLogicType === "ACCOUNTABILITY";
+
   /**
    * Builds the initial answers map from the protocol's questions.
    * When resuming, pre-populates answers and subattribute selections from
@@ -60,11 +62,8 @@ export function useLogSession(protocol, auditorUserId, existingSession = null) {
         const saved = resumeByQuestion.get(q.questionId);
 
         // Build subattribute selections from the saved option IDs.
-        // The protocol gives us subattribute IDs; we need to map each
-        // subattribute to its previously selected option (if any).
         const subattributes = Object.fromEntries(
           (q.subattributes ?? []).map((s) => {
-            // Find whether any of the saved option IDs belongs to this subattribute
             const matchingOptionId = saved?.subattributeOptionIds?.find((optId) =>
               s.subattributeOptions?.some((o) => o.subattributeOptionId === optId)
             ) ?? null;
@@ -97,6 +96,7 @@ export function useLogSession(protocol, auditorUserId, existingSession = null) {
       [questionId]: {
         ...prev[questionId],
         answer,
+        // Clear subattribute selections whenever the answer changes away from NO
         subattributes: answer !== ANSWERS.NO
           ? Object.fromEntries(
               Object.keys(prev[questionId]?.subattributes ?? {}).map((k) => [k, null])
@@ -140,15 +140,42 @@ export function useLogSession(protocol, auditorUserId, existingSession = null) {
     if (!meta.interactionId.trim()) missing.push("Interaction ID");
     if (!meta.lobId)                missing.push("LOB");
     if (!meta.memberAuditedUserId)  missing.push("Member Audited");
+
     const unansweredNums = questions
       .map((q, i) => (answers[q.questionId]?.answer == null ? i + 1 : null))
       .filter(Boolean);
     if (unansweredNums.length > 0) missing.push(`Questions (${unansweredNums.join(", ")})`);
+
     if (commentsRequired && !meta.comments.trim()) {
       missing.push("Comments (required when any answer is No)");
     }
+
+    // ACCOUNTABILITY: every NO answer must have the accountability subattribute selected
+    if (isAccountabilityMode) {
+      const missingAccountability = questions
+        .filter((q) => answers[q.questionId]?.answer === ANSWERS.NO)
+        .filter((q) => {
+          const accountabilitySub = (q.subattributes ?? []).find(
+            (s) => s.isAccountabilitySubattribute
+          );
+          if (!accountabilitySub) return false; // no accountability sub on this question
+          const selectedOptionId = answers[q.questionId]?.subattributes?.[accountabilitySub.subattributeId];
+          return selectedOptionId == null; // not selected
+        })
+        .map((q) => {
+          const idx = questions.indexOf(q);
+          return idx + 1;
+        });
+
+      if (missingAccountability.length > 0) {
+        missing.push(
+          `Accountability (required for No answers on question${missingAccountability.length > 1 ? "s" : ""} ${missingAccountability.join(", ")})`
+        );
+      }
+    }
+
     return missing;
-  }, [meta, questions, answers, commentsRequired]);
+  }, [meta, questions, answers, commentsRequired, isAccountabilityMode]);
 
   const canSubmit = missingFields.length === 0 && totalCount > 0;
 
@@ -156,7 +183,6 @@ export function useLogSession(protocol, auditorUserId, existingSession = null) {
 
   const [saving,      setSaving]      = useState(false);
   const [saveError,   setSaveError]   = useState(null);
-  // Seed sessionId from the existing draft so the next save is an update
   const [sessionId,   setSessionId]   = useState(existingSession?.sessionId ?? null);
   const [savedStatus, setSavedStatus] = useState(null);
 
@@ -222,6 +248,7 @@ export function useLogSession(protocol, auditorUserId, existingSession = null) {
     meta, setMeta,
     answers, setAnswer, setSubattributeAnswer,
     isQuestionExpanded,
+    isAccountabilityMode,
     answeredCount, totalCount, isComplete,
     canDraft, canSubmit, missingFields,
     commentsRequired,

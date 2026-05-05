@@ -1,10 +1,14 @@
 package com.qually.qually.services;
 
 import com.qually.qually.dto.request.AuditProtocolRequestDTO;
+import com.qually.qually.dto.request.SubattributeRequestDTO;
 import com.qually.qually.dto.response.AuditProtocolResponseDTO;
 import com.qually.qually.mappers.AuditProtocolMapper;
 import com.qually.qually.models.AuditProtocol;
+import com.qually.qually.models.AuditQuestion;
 import com.qually.qually.models.Client;
+import com.qually.qually.models.Subattribute;
+import com.qually.qually.models.enums.AuditLogicType;
 import com.qually.qually.models.enums.ProtocolStatus;
 import com.qually.qually.repositories.AuditProtocolRepository;
 import com.qually.qually.repositories.ClientRepository;
@@ -46,15 +50,21 @@ public class AuditProtocolService {
                             dto.getProtocolName(), dto.getClientId());
                     throw new IllegalArgumentException(
                             "A protocol named '%s' already exists for this client"
-                            .formatted(dto.getProtocolName()));
+                                    .formatted(dto.getProtocolName()));
                 });
+
+        // Validate accountability structure before persisting when creating as FINALIZED
+        if (ProtocolStatus.FINALIZED.equals(dto.getProtocolStatus())
+                && AuditLogicType.ACCOUNTABILITY.equals(dto.getAuditLogicType())) {
+            validateAccountabilityStructureFromDTO(dto);
+        }
 
         AuditProtocol saved = auditProtocolRepository.save(
                 auditProtocolMapper.toEntity(dto, client));
 
-        log.info("Protocol {} '{}' created for client {} — logicType {}",
+        log.info("Protocol {} '{}' created for client {} — logicType {} status {}",
                 saved.getProtocolId(), saved.getProtocolName(),
-                client.getClientId(), saved.getAuditLogicType());
+                client.getClientId(), saved.getAuditLogicType(), saved.getProtocolStatus());
 
         return auditProtocolMapper.toDTO(saved);
     }
@@ -90,7 +100,7 @@ public class AuditProtocolService {
                 .ifPresent(existing -> {
                     throw new IllegalArgumentException(
                             "A protocol named '%s' already exists for this client"
-                            .formatted(dto.getProtocolName()));
+                                    .formatted(dto.getProtocolName()));
                 });
 
         protocol.setProtocolName(dto.getProtocolName());
@@ -109,6 +119,12 @@ public class AuditProtocolService {
         AuditProtocol protocol = auditProtocolRepository.findById(id)
                 .orElseThrow(() -> new EntityNotFoundException(
                         "Protocol with ID %d not found".formatted(id)));
+
+        // Validate accountability structure when finalizing an existing ACCOUNTABILITY protocol
+        if (AuditLogicType.ACCOUNTABILITY.equals(protocol.getAuditLogicType())) {
+            validateAccountabilityStructureFromEntity(protocol);
+        }
+
         protocol.setProtocolStatus(ProtocolStatus.FINALIZED);
         log.info("Protocol {} '{}' finalized", id, protocol.getProtocolName());
         return auditProtocolMapper.toDTO(auditProtocolRepository.save(protocol));
@@ -126,5 +142,76 @@ public class AuditProtocolService {
         protocol.setProtocolName(newName);
         log.info("Protocol {} renamed: '{}' → '{}'", id, oldName, newName);
         return auditProtocolMapper.toDTO(auditProtocolRepository.save(protocol));
+    }
+
+    // ── Validation helpers ────────────────────────────────────
+
+    /**
+     * Validates that every question in an ACCOUNTABILITY protocol has exactly one
+     * subattribute flagged as the accountability selector.
+     *
+     * <p>Used when creating a protocol directly as FINALIZED (new-protocol flow).</p>
+     *
+     * @throws IllegalStateException listing all offending question indices (1-based).
+     */
+    private void validateAccountabilityStructureFromDTO(AuditProtocolRequestDTO dto) {
+        if (dto.getAuditQuestions() == null || dto.getAuditQuestions().isEmpty()) {
+            throw new IllegalStateException(
+                    "An Accountability protocol must have at least one question.");
+        }
+
+        List<Integer> offenders = new java.util.ArrayList<>();
+        for (int i = 0; i < dto.getAuditQuestions().size(); i++) {
+            var q = dto.getAuditQuestions().get(i);
+            long count = q.getSubattributes() == null ? 0L :
+                    q.getSubattributes().stream()
+                            .filter(SubattributeRequestDTO::isAccountabilitySubattribute)
+                            .count();
+            if (count != 1) offenders.add(i + 1);
+        }
+
+        if (!offenders.isEmpty()) {
+            throw new IllegalStateException(buildErrorMessage(offenders));
+        }
+    }
+
+    /**
+     * Validates the same rule against an already-persisted entity.
+     *
+     * <p>Used when finalizing a DRAFT protocol via the ShowProtocol page.</p>
+     *
+     * @throws IllegalStateException listing all offending question indices (1-based).
+     */
+    private void validateAccountabilityStructureFromEntity(AuditProtocol protocol) {
+        List<AuditQuestion> questions = protocol.getAuditQuestions();
+
+        if (questions == null || questions.isEmpty()) {
+            throw new IllegalStateException(
+                    "An Accountability protocol must have at least one question.");
+        }
+
+        List<Integer> offenders = new java.util.ArrayList<>();
+        for (int i = 0; i < questions.size(); i++) {
+            long count = questions.get(i).getSubattributes() == null ? 0L :
+                    questions.get(i).getSubattributes().stream()
+                            .filter(Subattribute::isAccountability)
+                            .count();
+            if (count != 1) offenders.add(i + 1);
+        }
+
+        if (!offenders.isEmpty()) {
+            throw new IllegalStateException(buildErrorMessage(offenders));
+        }
+    }
+
+    private String buildErrorMessage(List<Integer> offendingQuestionNumbers) {
+        return ("Cannot finalize an Accountability protocol: every question must have " +
+                "exactly one accountability subattribute. " +
+                "Question%s missing it: %s.")
+                .formatted(
+                        offendingQuestionNumbers.size() > 1 ? "s" : "",
+                        offendingQuestionNumbers.toString()
+                                .replace("[", "").replace("]", "")
+                );
     }
 }

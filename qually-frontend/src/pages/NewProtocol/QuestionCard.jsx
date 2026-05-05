@@ -6,9 +6,39 @@ import { AttributeEditor } from "./AttributeEditor";
 import { EMPTY_ATTRIBUTE } from "../../hooks/useNewProtocol";
 import { COPC_CATEGORY_META } from "../../constants";
 
-export function QuestionCard({ question, index, onChange, onRemove, canRemove }) {
+/**
+ * @param {Object}  props
+ * @param {Object}  props.question
+ * @param {number}  props.index
+ * @param {Function} props.onChange
+ * @param {Function} props.onRemove
+ * @param {boolean} props.canRemove
+ * @param {"STANDARD"|"ACCOUNTABILITY"|null} props.auditLogicType
+ */
+export function QuestionCard({ question, index, onChange, onRemove, canRemove, auditLogicType }) {
   const isConfirmed  = question.confirmed;
   const categoryMeta = COPC_CATEGORY_META[question.category];
+  const isAccountabilityMode = auditLogicType === "ACCOUNTABILITY";
+
+  /**
+   * When an attribute is toggled as the accountability subattribute,
+   * clear the flag on all other siblings so at most one is marked.
+   */
+  const handleAttributeChange = (attrId, updated) => {
+    let siblings = question.subattributes.map((a) =>
+      a.id === attrId ? updated : a
+    );
+
+    // If the changed attribute just became the accountability one,
+    // clear it on every other sibling to enforce the "at most one" rule.
+    if (updated.isAccountabilitySubattribute) {
+      siblings = siblings.map((a) =>
+        a.id === attrId ? a : { ...a, isAccountabilitySubattribute: false }
+      );
+    }
+
+    onChange({ ...question, subattributes: siblings });
+  };
 
   return (
     <SectionCard className={`transition-all duration-300 ${isConfirmed ? "border-border-sec" : "border-lsg-blue ring-4 ring-lsg-blue/5"}`}>
@@ -76,12 +106,8 @@ export function QuestionCard({ question, index, onChange, onRemove, canRemove })
                 <AttributeEditor
                   key={attr.id}
                   attribute={attr}
-                  onChange={(updated) =>
-                    onChange({
-                      ...question,
-                      subattributes: question.subattributes.map((a) => (a.id === attr.id ? updated : a)),
-                    })
-                  }
+                  isAccountabilityMode={isAccountabilityMode}
+                  onChange={(updated) => handleAttributeChange(attr.id, updated)}
                   onRemove={() =>
                     onChange({
                       ...question,

@@ -25,10 +25,13 @@ export default function NewProtocolPage() {
     protocolAbbreviation, setProtocolAbbreviation,
     version,              setVersion,
     auditLogicType,       setAuditLogicType,
+    isAccountabilityMode,
     questions,
     clients,              clientsLoading,
-    canSave,              saving,           saveError,
-    updateQuestion,       removeQuestion,   addQuestion,
+    canSave,              canFinalize,
+    accountabilityFinalizeErrors,
+    saving,               saveError,
+    updateQuestion,       removeQuestion, addQuestion,
     handleSave,
   } = useNewProtocol();
 
@@ -146,6 +149,7 @@ export default function NewProtocolPage() {
             key={q.id}
             question={q}
             index={i}
+            auditLogicType={auditLogicType}
             onChange={(updated) => updateQuestion(q.id, updated)}
             onRemove={() => removeQuestion(q.id)}
             canRemove={questions.length > 1}
@@ -167,16 +171,29 @@ export default function NewProtocolPage() {
         </div>
       )}
 
-      <footer className="sticky bottom-6 bg-bg-primary/80 backdrop-blur-md p-4 border border-border-ter rounded-2xl shadow-lg flex items-center justify-between">
-        <Btn variant="ghost" onClick={() => navigate("/")}>Cancel</Btn>
-        <div className="flex gap-3">
-          <Btn variant="secondary" onClick={() => handleSave("DRAFT")} disabled={saving || !canSave}>
-            Save Draft
-          </Btn>
-          <Btn variant="primary" onClick={() => handleSave("FINALIZED")} disabled={saving || !canSave}>
-            {saving ? "Saving…" : "Finalize Protocol"}
-          </Btn>
+      <footer className="sticky bottom-6 bg-bg-primary/80 backdrop-blur-md p-4 border border-border-ter rounded-2xl shadow-lg flex flex-col gap-3">
+      
+        {/* Accountability finalize hint — only shown when relevant */}
+        {isAccountabilityMode && accountabilityFinalizeErrors.length > 0 && (
+          <p className="text-xs text-warning-text bg-warning-surface px-3 py-2 rounded-lg">
+            <strong>Cannot finalize yet:</strong> question{accountabilityFinalizeErrors.length > 1 ? "s" : ""}{" "}
+            {accountabilityFinalizeErrors.join(", ")} need an accountability subattribute marked.
+            You can still save as draft.
+          </p>
+        )}
+      
+        <div className="flex items-center justify-between">
+          <Btn variant="ghost" onClick={() => navigate("/")}>Cancel</Btn>
+          <div className="flex gap-3">
+            <Btn variant="secondary" onClick={() => handleSave("DRAFT")} disabled={saving || !canSave}>
+              Save Draft
+            </Btn>
+            <Btn variant="primary" onClick={() => handleSave("FINALIZED")} disabled={saving || !canFinalize}>
+              {saving ? "Saving…" : "Finalize Protocol"}
+            </Btn>
+          </div>
         </div>
+      
       </footer>
     </div>
   );

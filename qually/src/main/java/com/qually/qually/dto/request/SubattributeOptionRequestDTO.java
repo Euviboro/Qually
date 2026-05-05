@@ -3,40 +3,9 @@ package com.qually.qually.dto.request;
 import jakarta.validation.constraints.NotBlank;
 import lombok.Getter;
 import lombok.Setter;
-import lombok.NoArgsConstructor;
-import lombok.AllArgsConstructor;
 
-/**
- * Request DTO for a single answer-choice option within a subattribute.
- *
- * <p>This DTO is shared by two distinct execution paths that have different
- * requirements for {@code subattributeId}:</p>
- *
- * <ul>
- *   <li><strong>Nested flow</strong> — used inside {@code SubattributeRequestDTO}
- *       when creating or updating a question via {@code AuditQuestionController}.
- *       {@code SubattributeOptionMapper.toEntity(dto, parent)} receives the parent
- *       {@code Subattribute} directly as a parameter and never reads
- *       {@code subattributeId}. The field is {@code null} in this path and that
- *       is correct.</li>
- *   <li><strong>Standalone flow</strong> — used by {@code SubattributeOptionService
- *       .createSubattributeOption}, which calls {@code subattributeRepository
- *       .findById(dto.getSubattributeId())} to resolve the parent. The field
- *       must be non-null here, and that is enforced by an explicit null check in
- *       the service rather than by Bean Validation.</li>
- * </ul>
- *
- * <p><strong>Why the annotation was removed:</strong> the previous
- * {@code @NotNull(groups = OnIndividualSave.class)} annotation caused Bean
- * Validation to reject every question-create request that included subattribute
- * options, because the nested path never sends {@code subattributeId}. Moving the
- * null guard into the service keeps the standalone contract intact without
- * polluting the nested path with an invalid constraint.</p>
- */
 @Getter
 @Setter
-@NoArgsConstructor
-@AllArgsConstructor
 public class SubattributeOptionRequestDTO {
 
     /**
@@ -55,9 +24,16 @@ public class SubattributeOptionRequestDTO {
     private Integer subattributeId;
 
     /**
-     * Display label for this answer choice (e.g. "Yes", "No", "N/A").
+     * Display label for this answer choice (e.g. "Company", "Agent", "External").
      * Required in both flows.
      */
     @NotBlank(message = "Option label is required")
     private String optionLabel;
+
+    /**
+     * Whether selecting this option means the company is accountable for the failure.
+     * Only meaningful on options that belong to an accountability subattribute in an
+     * ACCOUNTABILITY protocol. Defaults to {@code false}.
+     */
+    private boolean isCompanyAccountable;
 }
